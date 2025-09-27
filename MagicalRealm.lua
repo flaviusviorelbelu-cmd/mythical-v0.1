@@ -8,7 +8,7 @@ print("[MagicalRealm][INFO] MagicalRealm module loaded")
 
 -- Configuration
 local WORLD_CONFIG = {
-    MAIN_ISLAND_SIZE = Vector3.new(200, 20, 200),
+    MAIN_ISLAND_SIZE = Vector3.new(512, 20, 512),
     MAIN_ISLAND_POSITION = Vector3.new(0, 0, 0),
     SHOP_POSITIONS = {
         SeedShop = Vector3.new(-40, 12, -40),
@@ -247,3 +247,4 @@ function MagicalRealm.GetAllShopBuildings()
 end
 
 return MagicalRealm
+
