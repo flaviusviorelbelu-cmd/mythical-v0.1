@@ -1,250 +1,133 @@
--- Garden Plot Manager (ServerScript)
+-- GardenSystem.lua (ServerScriptService) - Unified Garden Management
 local GardenSystem = {}
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local DEBUG_MODE = true
 
 -- Debug logger
 local function debugLog(msg, lvl)
 	if DEBUG_MODE then
-		print("[MapGenerator][" .. (lvl or "INFO") .. "] " .. msg)
+		print("[GardenSystem][" .. (lvl or "INFO") .. "] " .. msg)
 	end
 end
 
--- Plot configuration
+-- Configuration
 local PLOT_SIZE = Vector3.new(3.5, 0.2, 3.5)
 local PLOTS_PER_PLAYER = 9
 local PLOT_SPACING = 5
 
--- Store player plots
-local playerPlots = {}
+-- Storage
+local playerGardens = {} -- userId -> gardenData
+local playerPlots = {}   -- userId -> {plotIndex -> plotData}
 
-function GardenSystem.AddFence(centerPos, parentModel)
-	local length = PLOT_SPACING * 7 -- Ajusteaza sa depa?easca gridul 3x3
-	local thickness = 0.4
-	local height = 2
-	local y = centerPos.Y + height / 2
-
-	local fenceOffsets = {
-		{Vector3.new(0, 0, length/2), Vector3.new(length, height, thickness)},    -- fa?a
-		{Vector3.new(0, 0, -length/2), Vector3.new(length, height, thickness)},   -- spate
-		{Vector3.new(length/2, 0, 0), Vector3.new(thickness, height, length)},    -- dreapta
-		{Vector3.new(-length/2, 0, 0), Vector3.new(thickness, height, length)},   -- stânga
+-- Seed and crop configurations
+local SEED_CONFIG = {
+	basic_seed = {
+		name = "Magic Wheat",
+		cost = 10,
+		growTime = 30,
+		cropType = "magic_wheat",
+		color = Color3.fromRGB(255, 255, 0)
+	},
+	stellar_seed = {
+		name = "Stellar Corn",
+		cost = 50,
+		growTime = 120,
+		cropType = "stellar_corn",
+		color = Color3.fromRGB(255, 200, 0)
+	},
+	cosmic_seed = {
+		name = "Cosmic Berries",
+		cost = 200,
+		growTime = 300,
+		cropType = "cosmic_berries",
+		color = Color3.fromRGB(200, 0, 255)
 	}
-	for _, offset in ipairs(fenceOffsets) do
-		local fence = Instance.new("Part")
-		fence.Name = "Fence"
-		fence.Size = offset[2]
-		fence.Position = centerPos + offset[1] + Vector3.new(0, height/2, 0)
-		fence.Anchored = true
-		fence.Material = Enum.Material.Wood
-		fence.BrickColor = BrickColor.new("Burgundy")
-		fence.Parent = parentModel
-	end
+}
+
+local CROP_CONFIG = {
+	magic_wheat = { sellPrice = 15, expReward = 5 },
+	stellar_corn = { sellPrice = 80, expReward = 15 },
+	cosmic_berries = { sellPrice = 350, expReward = 35 }
+}
+
+-- Require DataManager safely
+local DataManager
+spawn(function()
+	DataManager = require(script.Parent:WaitForChild("DataManager"))
+end)
+
+-- === VALIDATION FUNCTIONS ===
+function GardenSystem.IsValidSeed(seedType)
+	return SEED_CONFIG[seedType] ~= nil
 end
 
-
-function GardenSystem.AddChest(centerPos, parentModel)
-	-- Plaseaza cufarul lânga ploturi, la stânga
-	local chest = Instance.new("Part")
-	chest.Name = "Chest"
-	chest.Size = Vector3.new(2.2, 1.6, 1.2)
-	chest.Position = centerPos + Vector3.new(-(PLOT_SPACING * 2), 1, 0)
-	chest.Anchored = true
-	chest.Material = Enum.Material.Wood
-	chest.BrickColor = BrickColor.new("Dark orange")
-	chest.Shape = Enum.PartType.Block
-	chest.Parent = parentModel
-	
-	-- Add corner reinforcements (metal bands)
-	local function addMetalBand(offset, size)
-		local band = Instance.new("Part")
-		band.Name = "MetalBand"
-		band.Size = size
-		band.Position = chest.Position + offset
-		band.Anchored = true
-		band.Material = Enum.Material.Metal
-		band.BrickColor = BrickColor.new("Really black")
-		band.Parent = chest
-
-		-- Weld to chest
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = chest
-		weld.Part1 = band
-		weld.Parent = chest
-
-		return band
-	end
-	
-	-- Add horizontal metal bands
-	addMetalBand(Vector3.new(0, 0.6, 0), Vector3.new(2.4, 0.1, 1.4))
-	addMetalBand(Vector3.new(0, -0.6, 0), Vector3.new(2.4, 0.1, 1.4))
-
-	-- Add vertical corner bands
-	addMetalBand(Vector3.new(-1, 0, -0.5), Vector3.new(0.1, 1.8, 0.1))
-	addMetalBand(Vector3.new(1, 0, -0.5), Vector3.new(0.1, 1.8, 0.1))
-	addMetalBand(Vector3.new(-1, 0, 0.5), Vector3.new(0.1, 1.8, 0.1))
-	addMetalBand(Vector3.new(1, 0, 0.5), Vector3.new(0.1, 1.8, 0.1))
-	
-	-- Create chest lid
-	local lid = Instance.new("Part")
-	lid.Name = "ChestLid"
-	lid.Size = Vector3.new(2.2, 0.2, 1.2)
-	lid.Position = chest.Position + Vector3.new(0, 0.9, 0)
-	lid.Anchored = true
-	lid.Material = Enum.Material.Wood
-	lid.BrickColor = BrickColor.new("Dark orange")
-	lid.Parent = chest 
-	
-	-- Add lid handle
-	local handle = Instance.new("Part")
-	handle.Name = "Handle"
-	handle.Size = Vector3.new(0.3, 0.1, 0.1)
-	handle.Position = lid.Position + Vector3.new(0, 0.15, 0.5)
-	handle.Anchored = true
-	handle.Material = Enum.Material.Metal
-	handle.BrickColor = BrickColor.new("Gold")
-	handle.Shape = Enum.PartType.Cylinder
-	handle.Rotation = Vector3.new(0, 0, 90)
-	handle.Parent = chest
-	
-	-- Add decorative lock
-	local lock = Instance.new("Part")
-	lock.Name = "Lock"
-	lock.Size = Vector3.new(0.3, 0.4, 0.2)
-	lock.Position = chest.Position + Vector3.new(0, 0, 0.7)
-	lock.Anchored = true
-	lock.Material = Enum.Material.Metal
-	lock.BrickColor = BrickColor.new("Gold")
-	lock.Parent = chest
-	
-	-- Add keyhole to lock
-	local keyhole = Instance.new("Part")
-	keyhole.Name = "Keyhole"
-	keyhole.Size = Vector3.new(0.05, 0.15, 0.25)
-	keyhole.Position = lock.Position + Vector3.new(0, 0, 0.01)
-	keyhole.Anchored = true
-	keyhole.Material = Enum.Material.Metal
-	keyhole.BrickColor = BrickColor.new("Really black")
-	keyhole.Parent = chest
-	
-	-- Add some decorative studs
-	local function addStud(offset)
-		local stud = Instance.new("Part")
-		stud.Name = "Stud"
-		stud.Size = Vector3.new(0.1, 0.1, 0.1)
-		stud.Position = chest.Position + offset
-		stud.Anchored = true
-		stud.Material = Enum.Material.Metal
-		stud.BrickColor = BrickColor.new("Really black")
-		stud.Shape = Enum.PartType.Ball
-		stud.Parent = chest
-
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = chest
-		weld.Part1 = stud
-		weld.Parent = chest
-	end
-	
-	-- Add studs to corners and sides
-	addStud(Vector3.new(-0.8, 0.4, 0.55))
-	addStud(Vector3.new(0.8, 0.4, 0.55))
-	addStud(Vector3.new(-0.8, -0.4, 0.55))
-	addStud(Vector3.new(0.8, -0.4, 0.55))
-	
-	-- Add a subtle PointLight for magical effect
-	local light = Instance.new("PointLight")
-	light.Name = "ChestGlow"
-	light.Brightness = 0.5
-	light.Color = Color3.new(1, 0.8, 0.4) -- Warm golden glow
-	light.Range = 8
-	light.Parent = chest
-	
-	-- Add a subtle ParticleEmitter for sparkles (optional)
-	local attachment = Instance.new("Attachment")
-	attachment.Name = "SparkleAttachment"
-	attachment.Position = Vector3.new(0, 0.8, 0)
-	attachment.Parent = chest
-
-	local sparkles = Instance.new("ParticleEmitter")
-	sparkles.Name = "ChestSparkles"
-	sparkles.Enabled = false -- Enable when chest is opened or interacted with
-	sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-	sparkles.Lifetime = NumberRange.new(0.5, 1.5)
-	sparkles.Rate = 10
-	sparkles.SpreadAngle = Vector2.new(45, 45)
-	sparkles.Speed = NumberRange.new(2, 4)
-	sparkles.Parent = attachment
-	
-	-- Add ClickDetector for interaction
-	local clickDetector = Instance.new("ClickDetector")
-	clickDetector.Name = "ChestInteraction"
-	clickDetector.MaxActivationDistance = 10
-	clickDetector.Parent = chest
-	
-	-- The parts are accessible by their names for future animations:
-	-- chest:FindFirstChild("ChestLid") - for the lid
-	-- chest:FindFirstChild("Handle") - for the handle
-	-- chest:FindFirstChild("SparkleAttachment"):FindFirstChild("ChestSparkles") - for sparkles
-
-	
-	-- Po?i adauga ?i Decal, SurfaceGui sau Mesh daca ai model 3D pentru un aspect mai interesant
-	return chest
+function GardenSystem.IsValidCrop(cropType)
+	return CROP_CONFIG[cropType] ~= nil
 end
 
-
+-- === GARDEN INITIALIZATION ===
 function GardenSystem.InitializePlayerGarden(player)
 	local userId = player.UserId
-	playerPlots[userId] = {}
+	if playerGardens[userId] then
+		debugLog("Garden already exists for " .. player.Name, "WARN")
+		return
+	end
+
+	-- Create garden data structure
+	playerGardens[userId] = {
+		owner = player,
+		centerPos = GardenSystem.GetPlayerGardenPosition(userId),
+		model = nil
+	}
 	
-	-- Creeaza Model pentru toata gradina
+	playerPlots[userId] = {}
+
+	-- Create physical garden
 	local gardenModel = Instance.new("Model")
 	gardenModel.Name = player.Name .. "_Garden"
 	gardenModel.Parent = workspace
-	
-	-- Create player's garden area
-	local gardenCenter = GardenSystem.GetPlayerGardenPosition(userId)
+	playerGardens[userId].model = gardenModel
+
+	local gardenCenter = playerGardens[userId].centerPos
 
 	-- Create 9 plots in 3x3 grid
 	for row = 1, 3 do
 		for col = 1, 3 do
 			local plotIndex = (row - 1) * 3 + col
 			local plot = GardenSystem.CreatePlot(player, plotIndex, gardenCenter, row, col)
-			-- Muta plotBase la gardenModel
 			plot.part.Parent = gardenModel
 			playerPlots[userId][plotIndex] = plot
 		end
 	end
-	
-	-- Adauga cufar lânga grid
-	GardenSystem.AddChest(gardenCenter, gardenModel)
-	
-	-- Adauga gard în jurul gradinii
-	GardenSystem.AddFence(gardenCenter, gardenModel)
 
-	-- Placare nameplate tot la gardenModel
+	-- Add decorations
+	GardenSystem.AddChest(gardenCenter, gardenModel)
+	GardenSystem.AddFence(gardenCenter, gardenModel)
 	GardenSystem.CreatePlayerNameplate(player, gardenCenter, gardenModel)
 
-	print("Created garden for player:", player.Name)
+	debugLog("Created garden for player: " .. player.Name)
 end
 
 function GardenSystem.GetPlayerGardenPosition(userId)
 	-- Position players in circle around main island
-	local angle = math.rad((userId % 12) * 30) -- Spread players around
+	local angle = math.rad((userId % 12) * 30)
 	local radius = 120
 	return Vector3.new(
 		math.cos(angle) * radius,
-		6, -- Elevated above main island
+		6,
 		math.sin(angle) * radius
 	)
 end
 
+-- === PLOT MANAGEMENT ===
 function GardenSystem.CreatePlot(player, plotIndex, centerPos, row, col)
 	-- Calculate plot position in 3x3 grid
-	local offsetX = (col - 2) * PLOT_SPACING -- -10, 0, 10
-	local offsetZ = (row - 2) * PLOT_SPACING -- -10, 0, 10
+	local offsetX = (col - 2) * PLOT_SPACING
+	local offsetZ = (row - 2) * PLOT_SPACING
 	local plotPos = centerPos + Vector3.new(offsetX, 0, offsetZ)
 
 	-- Create plot base
@@ -255,7 +138,6 @@ function GardenSystem.CreatePlot(player, plotIndex, centerPos, row, col)
 	plotBase.Anchored = true
 	plotBase.Material = Enum.Material.Ground
 	plotBase.BrickColor = BrickColor.new("Brown")
-	plotBase.Parent = workspace
 
 	-- Create plot border
 	local border = Instance.new("Part")
@@ -269,18 +151,18 @@ function GardenSystem.CreatePlot(player, plotIndex, centerPos, row, col)
 	border.Transparency = 0.3
 	border.Parent = plotBase
 
-	-- Create plot status indicator
+	-- Create status indicator
 	local statusIndicator = Instance.new("Part")
 	statusIndicator.Name = "StatusIndicator"
 	statusIndicator.Size = Vector3.new(1, 0.2, 1)
 	statusIndicator.Position = plotPos + Vector3.new(0.5, 0.5, 0.5)
 	statusIndicator.Anchored = true
 	statusIndicator.Material = Enum.Material.Neon
-	statusIndicator.BrickColor = BrickColor.new("Lime green") -- Green = ready to plant
+	statusIndicator.BrickColor = BrickColor.new("Lime green")
 	statusIndicator.Shape = Enum.PartType.Cylinder
 	statusIndicator.Parent = plotBase
 
-	-- Create click detector for planting
+	-- Create click detector
 	local clickDetector = Instance.new("ClickDetector")
 	clickDetector.MaxActivationDistance = 50
 	clickDetector.Parent = plotBase
@@ -307,8 +189,51 @@ function GardenSystem.CreatePlot(player, plotIndex, centerPos, row, col)
 	return plotData
 end
 
+-- === DECORATIVE ELEMENTS ===
+function GardenSystem.AddFence(centerPos, parentModel)
+	local length = PLOT_SPACING * 7
+	local thickness = 0.4
+	local height = 2
+
+	local fenceOffsets = {
+		{Vector3.new(0, 0, length/2), Vector3.new(length, height, thickness)},
+		{Vector3.new(0, 0, -length/2), Vector3.new(length, height, thickness)},
+		{Vector3.new(length/2, 0, 0), Vector3.new(thickness, height, length)},
+		{Vector3.new(-length/2, 0, 0), Vector3.new(thickness, height, length)}
+	}
+	
+	for _, offset in ipairs(fenceOffsets) do
+		local fence = Instance.new("Part")
+		fence.Name = "Fence"
+		fence.Size = offset[2]
+		fence.Position = centerPos + offset[1] + Vector3.new(0, height/2, 0)
+		fence.Anchored = true
+		fence.Material = Enum.Material.Wood
+		fence.BrickColor = BrickColor.new("Burgundy")
+		fence.Parent = parentModel
+	end
+end
+
+function GardenSystem.AddChest(centerPos, parentModel)
+	local chest = Instance.new("Part")
+	chest.Name = "Chest"
+	chest.Size = Vector3.new(2.2, 1.6, 1.2)
+	chest.Position = centerPos + Vector3.new(-(PLOT_SPACING * 2), 1, 0)
+	chest.Anchored = true
+	chest.Material = Enum.Material.Wood
+	chest.BrickColor = BrickColor.new("Dark orange")
+	chest.Parent = parentModel
+	
+	-- Add click detector for chest interaction
+	local clickDetector = Instance.new("ClickDetector")
+	clickDetector.Name = "ChestInteraction"
+	clickDetector.MaxActivationDistance = 10
+	clickDetector.Parent = chest
+	
+	return chest
+end
+
 function GardenSystem.CreatePlayerNameplate(player, centerPos, parentModel)
-	-- Floating nameplate above garden
 	local nameplate = Instance.new("Part")
 	nameplate.Name = player.Name .. "_Nameplate"
 	nameplate.Size = Vector3.new(10, 1, 3)
@@ -316,9 +241,8 @@ function GardenSystem.CreatePlayerNameplate(player, centerPos, parentModel)
 	nameplate.Anchored = true
 	nameplate.CanCollide = false
 	nameplate.Transparency = 1
-	nameplate.Parent = parentModel or workspace
+	nameplate.Parent = parentModel
 
-	-- Create text label
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front
 	gui.Parent = nameplate
@@ -332,11 +256,7 @@ function GardenSystem.CreatePlayerNameplate(player, centerPos, parentModel)
 	textLabel.Font = Enum.Font.Fantasy
 	textLabel.Parent = gui
 
-	-- Add glowing effect
-	textLabel.TextStrokeTransparency = 0
-	textLabel.TextStrokeColor3 = Color3.fromRGB(150, 255, 200)
-
-	-- Gentle floating animation
+	-- Floating animation
 	local floatTween = TweenService:Create(
 		nameplate,
 		TweenInfo.new(4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
@@ -345,78 +265,167 @@ function GardenSystem.CreatePlayerNameplate(player, centerPos, parentModel)
 	floatTween:Play()
 end
 
-function GardenSystem.HandlePlotClick(clickingPlayer, plotData)
-	-- Only owner can interact with their plots
-	if clickingPlayer ~= plotData.owner then
-		return
+-- === FARMING FUNCTIONALITY ===
+function GardenSystem.BuySeed(player, seedType, amount)
+	if not DataManager then
+		return false, "Data system not ready", 0
 	end
-
-	print("Plot clicked by:", clickingPlayer.Name, "Plot:", plotData.plotIndex)
-
-	if plotData.seedType == nil then
-		-- Empty plot - show seed selection (we'll implement this next)
-		print("Empty plot - ready for planting")
-		-- For now, plant a basic seed
-		GardenSystem.PlantSeed(plotData, "basic_seed")
-	elseif plotData.isReady then
-		-- Ready to harvest
-		GardenSystem.HarvestCrop(plotData)
-	else
-		-- Still growing
-		local timeLeft = GardenSystem.GetGrowTimeLeft(plotData)
-		print("Still growing... Time left:", timeLeft, "seconds")
+	
+	local seedConfig = SEED_CONFIG[seedType]
+	if not seedConfig then
+		return false, "Invalid seed type", 0
 	end
+	
+	local playerData = DataManager.GetPlayerData(player)
+	if not playerData then
+		return false, "Player data not found", 0
+	end
+	
+	local totalCost = seedConfig.cost * amount
+	if playerData.coins < totalCost then
+		return false, "Not enough coins", 0
+	end
+	
+	-- Deduct coins and add seeds
+	playerData.coins = playerData.coins - totalCost
+	playerData.inventory = playerData.inventory or {}
+	playerData.inventory.seeds = playerData.inventory.seeds or {}
+	playerData.inventory.seeds[seedType] = (playerData.inventory.seeds[seedType] or 0) + amount
+	
+	DataManager.SavePlayerData(player, playerData)
+	return true, "Seeds purchased successfully", totalCost
 end
 
-function GardenSystem.PlantSeed(plotData, seedType)
-	local GameConfig = require(ReplicatedStorage:WaitForChild("GameConfig"))
-	local seedData = GameConfig.Seeds[seedType]
-
-	if not seedData then
-		warn("Invalid seed type:", seedType)
-		return
+function GardenSystem.PlantSeed(player, plotIndex, seedType)
+	if not DataManager then
+		return false, "Data system not ready"
 	end
-
-	-- Update plot data
+	
+	local userId = player.UserId
+	local plots = playerPlots[userId]
+	if not plots or not plots[plotIndex] then
+		return false, "Plot not found"
+	end
+	
+	local plotData = plots[plotIndex]
+	if plotData.seedType then
+		return false, "Plot already occupied"
+	end
+	
+	local seedConfig = SEED_CONFIG[seedType]
+	if not seedConfig then
+		return false, "Invalid seed type"
+	end
+	
+	local playerData = DataManager.GetPlayerData(player)
+	if not playerData or not playerData.inventory or not playerData.inventory.seeds or 
+	   (playerData.inventory.seeds[seedType] or 0) <= 0 then
+		return false, "No seeds available"
+	end
+	
+	-- Plant the seed
 	plotData.seedType = seedType
 	plotData.plantTime = tick()
 	plotData.growthStage = 1
 	plotData.isReady = false
-
-	-- Update visual indicator
-	plotData.indicator.BrickColor = BrickColor.new("Yellow") -- Growing
-
-	-- Create growing crop visual
-	GardenSystem.CreateCropVisual(plotData, seedData)
-
-	-- Start growth timer
-	GardenSystem.StartGrowthTimer(plotData, seedData)
-
-	print("Planted", seedData.name, "in plot", plotData.plotIndex)
+	
+	-- Update visuals
+	plotData.indicator.BrickColor = BrickColor.new("Yellow")
+	GardenSystem.CreateCropVisual(plotData, seedConfig)
+	GardenSystem.StartGrowthTimer(plotData, seedConfig)
+	
+	-- Consume seed from inventory
+	playerData.inventory.seeds[seedType] = playerData.inventory.seeds[seedType] - 1
+	DataManager.SavePlayerData(player, playerData)
+	
+	debugLog("Planted " .. seedConfig.name .. " in plot " .. plotIndex)
+	return true, "Seed planted successfully"
 end
 
-function GardenSystem.CreateCropVisual(plotData, seedData)
+function GardenSystem.Harvest(player, plotIndex)
+	local userId = player.UserId
+	local plots = playerPlots[userId]
+	if not plots or not plots[plotIndex] then
+		return false, nil, 0, "Plot not found"
+	end
+	
+	local plotData = plots[plotIndex]
+	if not plotData.isReady or not plotData.seedType then
+		return false, nil, 0, "Plot not ready for harvest"
+	end
+	
+	local seedConfig = SEED_CONFIG[plotData.seedType]
+	local cropType = seedConfig.cropType
+	local quantity = 1
+	
+	-- Clear plot
+	plotData.seedType = nil
+	plotData.plantTime = nil
+	plotData.growthStage = 0
+	plotData.isReady = false
+	
+	-- Update visuals
+	plotData.indicator.BrickColor = BrickColor.new("Lime green")
+	if plotData.cropModel then
+		plotData.cropModel:Destroy()
+		plotData.cropModel = nil
+	end
+	
+	-- Add to player inventory
+	if DataManager then
+		local playerData = DataManager.GetPlayerData(player)
+		if playerData then
+			playerData.inventory = playerData.inventory or {}
+			playerData.inventory.crops = playerData.inventory.crops or {}
+			playerData.inventory.crops[cropType] = (playerData.inventory.crops[cropType] or 0) + quantity
+			DataManager.SavePlayerData(player, playerData)
+		end
+	end
+	
+	return true, cropType, quantity, "Harvest successful"
+end
+
+function GardenSystem.SellPlant(player, cropType, quantity)
+	if not DataManager then
+		return false, 0, "Data system not ready"
+	end
+	
+	local cropConfig = CROP_CONFIG[cropType]
+	if not cropConfig then
+		return false, 0, "Invalid crop type"
+	end
+	
+	local playerData = DataManager.GetPlayerData(player)
+	if not playerData or not playerData.inventory or not playerData.inventory.crops or 
+	   (playerData.inventory.crops[cropType] or 0) < quantity then
+		return false, 0, "Not enough crops to sell"
+	end
+	
+	local coinsGained = cropConfig.sellPrice * quantity
+	
+	-- Remove crops and add coins
+	playerData.inventory.crops[cropType] = playerData.inventory.crops[cropType] - quantity
+	playerData.coins = (playerData.coins or 0) + coinsGained
+	
+	DataManager.SavePlayerData(player, playerData)
+	return true, coinsGained, "Crops sold successfully"
+end
+
+-- === VISUAL EFFECTS ===
+function GardenSystem.CreateCropVisual(plotData, seedConfig)
 	if plotData.cropModel then
 		plotData.cropModel:Destroy()
 	end
 
-	-- Create simple crop representation
 	local crop = Instance.new("Part")
-	crop.Name = "Crop_" .. seedData.name
+	crop.Name = "Crop_" .. seedConfig.name
 	crop.Size = Vector3.new(2, 1, 2)
 	crop.Position = plotData.part.Position + Vector3.new(0, 0.5, 0)
 	crop.Anchored = true
 	crop.Material = Enum.Material.Neon
-	crop.BrickColor = BrickColor.new("Lime green")
+	crop.Color = seedConfig.color
 	crop.Shape = Enum.PartType.Ball
 	crop.Parent = plotData.part
-
-	-- Add magical growing effect
-	local pointLight = Instance.new("PointLight")
-	pointLight.Color = Color3.fromRGB(100, 255, 100)
-	pointLight.Brightness = 1
-	pointLight.Range = 10
-	pointLight.Parent = crop
 
 	plotData.cropModel = crop
 
@@ -429,160 +438,75 @@ function GardenSystem.CreateCropVisual(plotData, seedData)
 	growTween:Play()
 end
 
-function GardenSystem.StartGrowthTimer(plotData, seedData)
+function GardenSystem.StartGrowthTimer(plotData, seedConfig)
 	spawn(function()
-		wait(seedData.growTime)
-
+		wait(seedConfig.growTime)
+		
 		-- Crop is ready!
 		plotData.isReady = true
 		plotData.growthStage = 3
-
+		
 		-- Update visual indicators
-		plotData.indicator.BrickColor = BrickColor.new("Bright green") -- Ready to harvest
-
+		plotData.indicator.BrickColor = BrickColor.new("Bright green")
+		
 		if plotData.cropModel then
-			-- Make crop glow when ready
 			plotData.cropModel.Material = Enum.Material.ForceField
-			plotData.cropModel.BrickColor = BrickColor.new("Gold")
-
-			-- Add harvest sparkles
-			local attachment = Instance.new("Attachment")
-			attachment.Parent = plotData.cropModel
-
-			local particles = Instance.new("ParticleEmitter")
-			particles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-			particles.Color = ColorSequence.new(Color3.fromRGB(255, 215, 0))
-			particles.Size = NumberSequence.new(0.5)
-			particles.Lifetime = NumberRange.new(2.0)
-			particles.Rate = 30
-			particles.Parent = attachment
+			plotData.cropModel.Color = Color3.fromRGB(255, 215, 0)
 		end
-
-		print("Crop ready for harvest in plot", plotData.plotIndex)
+		
+		debugLog("Crop ready for harvest in plot " .. plotData.plotIndex)
 	end)
 end
 
-function GardenSystem.HarvestCrop(plotData)
-	local GameConfig = require(ReplicatedStorage:WaitForChild("GameConfig"))
-	local seedData = GameConfig.Seeds[plotData.seedType]
-
-	-- Give rewards (we'll integrate with economy system later)
-	print("Harvested", seedData.name, "- Earned", seedData.coinReward, "coins and", seedData.expReward, "exp")
-
-	-- Clear plot
-	plotData.seedType = nil
-	plotData.plantTime = nil
-	plotData.growthStage = 0
-	plotData.isReady = false
-
-	-- Reset visual indicator
-	plotData.indicator.BrickColor = BrickColor.new("Lime green") -- Ready to plant again
-
-	-- Remove crop visual
-	if plotData.cropModel then
-		-- Harvest animation
-		local harvestTween = TweenService:Create(
-			plotData.cropModel,
-			TweenInfo.new(1, Enum.EasingStyle.Back),
-			{
-				Size = Vector3.new(0.1, 0.1, 0.1),
-				Position = plotData.cropModel.Position + Vector3.new(0, 10, 0)
-			}
-		)
-		harvestTween:Play()
-
-		harvestTween.Completed:Connect(function()
-			plotData.cropModel:Destroy()
-			plotData.cropModel = nil
-		end)
+-- === INTERACTION HANDLING ===
+function GardenSystem.HandlePlotClick(clickingPlayer, plotData)
+	if clickingPlayer ~= plotData.owner then
+		return
 	end
 
-	print("Plot", plotData.plotIndex, "is now empty and ready for replanting")
+	debugLog("Plot clicked by: " .. clickingPlayer.Name .. ", Plot: " .. plotData.plotIndex)
+
+	if plotData.seedType == nil then
+		debugLog("Empty plot - ready for planting")
+	elseif plotData.isReady then
+		GardenSystem.Harvest(clickingPlayer, plotData.plotIndex)
+	else
+		local timeLeft = GardenSystem.GetGrowTimeLeft(plotData)
+		debugLog("Still growing... Time left: " .. timeLeft .. " seconds")
+	end
 end
 
 function GardenSystem.GetGrowTimeLeft(plotData)
-	local GameConfig = require(ReplicatedStorage:WaitForChild("GameConfig"))
-	local seedData = GameConfig.Seeds[plotData.seedType]
-
-	if not plotData.plantTime or not seedData then
+	local seedConfig = SEED_CONFIG[plotData.seedType]
+	if not plotData.plantTime or not seedConfig then
 		return 0
 	end
-
+	
 	local elapsed = tick() - plotData.plantTime
-	local timeLeft = math.max(0, seedData.growTime - elapsed)
+	local timeLeft = math.max(0, seedConfig.growTime - elapsed)
 	return math.floor(timeLeft)
 end
 
---Initialize all garden at begining
-local GARDEN_COUNT = 8
-for i = 1, GARDEN_COUNT do
-	GardenSystem.InitializePlayerGarden({UserId = i, Name = "Garden"..i})
-end
-
--- Exemplu: ServerScriptService/CreateShopsScript.lua sau în Script la ini?ializarea lumii
-local TERRAIN_HEIGHT = 5  -- pune aici înal?imea insulei tale
-
-local function generateShops()
-	local shopConfigs = {
-		{name = "SeedShop", color = "Bright green", pos = Vector3.new(50, TERRAIN_HEIGHT + 6, 50)},
-		{name = "AnimalShop", color = "Bright blue", pos = Vector3.new(-50, TERRAIN_HEIGHT + 6, 50)},
-		{name = "GearShop", color = "Bright red", pos = Vector3.new(50, TERRAIN_HEIGHT + 6, -50)},
-		{name = "CraftingStation", color = "Bright yellow", pos = Vector3.new(-50, TERRAIN_HEIGHT + 6, -50)}
-	}
-
-	for _, cfg in ipairs(shopConfigs) do
-		-- Create shop model container
-		local shopModel = Instance.new("Model")
-		shopModel.Name = cfg.name
-		shopModel.Parent = workspace
-
-		-- Create the visible building part
-		local building = Instance.new("Part")
-		building.Name = "Building"
-		building.Size = Vector3.new(16, 12, 16)
-		building.Material = Enum.Material.Brick
-		building.BrickColor = BrickColor.new(cfg.color)
-		building.Anchored = true
-		building.Position = cfg.pos
-		building.Parent = shopModel
-
-		-- Create shop sign
-		local sign = Instance.new("Part")
-		sign.Name = "Sign"
-		sign.Size = Vector3.new(12, 4, 0.5)
-		sign.Material = Enum.Material.Wood
-		sign.BrickColor = BrickColor.new("Brown")
-		sign.Anchored = true
-		sign.Position = cfg.pos + Vector3.new(0, 8, 10)
-		sign.Parent = shopModel
-		
-		-- Add ClickDetector for BuildingHandler
-		local clickDetector = Instance.new("ClickDetector")
-		clickDetector.Name = "ClickDetector"
-		clickDetector.MaxActivationDistance = 20
-		clickDetector.Parent = building
-
-		local gui = Instance.new("SurfaceGui", sign)
-		gui.Face = Enum.NormalId.Front
-
-		local textLabel = Instance.new("TextLabel", gui)
-		textLabel.Size = UDim2.new(1, 0, 1, 0)
-		textLabel.BackgroundTransparency = 1
-		textLabel.Text = cfg.name
-		textLabel.TextColor3 = Color3.new(1, 1, 1)
-		textLabel.TextScaled = true
-		textLabel.Font = Enum.Font.GothamBold
-
-		debugLog("Generated shop: " .. cfg.name)
-	end
-end
-
--- APEL FUNCTIE, ca sa apara shop-urile la start!
-generateShops()
+-- === DATA ACCESS FUNCTIONS ===
 function GardenSystem.GetPlayerPlots(player)
 	return playerPlots[player.UserId] or {}
 end
 
+function GardenSystem.GetInventory(player)
+	if not DataManager then return {} end
+	local playerData = DataManager.GetPlayerData(player)
+	return playerData and playerData.inventory or {}
+end
 
+-- === CLEANUP ===
+Players.PlayerRemoving:Connect(function(player)
+	local userId = player.UserId
+	if playerGardens[userId] and playerGardens[userId].model then
+		playerGardens[userId].model:Destroy()
+	end
+	playerGardens[userId] = nil
+	playerPlots[userId] = nil
+end)
 
+debugLog("GardenSystem loaded successfully")
 return GardenSystem
