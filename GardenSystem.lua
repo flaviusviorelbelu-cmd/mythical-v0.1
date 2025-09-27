@@ -83,7 +83,7 @@ function GardenSystem.InitializePlayerGarden(player)
 		centerPos = GardenSystem.GetPlayerGardenPosition(userId),
 		model = nil
 	}
-	
+
 	playerPlots[userId] = {}
 
 	-- Create physical garden
@@ -201,7 +201,7 @@ function GardenSystem.AddFence(centerPos, parentModel)
 		{Vector3.new(length/2, 0, 0), Vector3.new(thickness, height, length)},
 		{Vector3.new(-length/2, 0, 0), Vector3.new(thickness, height, length)}
 	}
-	
+
 	for _, offset in ipairs(fenceOffsets) do
 		local fence = Instance.new("Part")
 		fence.Name = "Fence"
@@ -223,13 +223,13 @@ function GardenSystem.AddChest(centerPos, parentModel)
 	chest.Material = Enum.Material.Wood
 	chest.BrickColor = BrickColor.new("Dark orange")
 	chest.Parent = parentModel
-	
+
 	-- Add click detector for chest interaction
 	local clickDetector = Instance.new("ClickDetector")
 	clickDetector.Name = "ChestInteraction"
 	clickDetector.MaxActivationDistance = 10
 	clickDetector.Parent = chest
-	
+
 	return chest
 end
 
@@ -270,28 +270,28 @@ function GardenSystem.BuySeed(player, seedType, amount)
 	if not DataManager then
 		return false, "Data system not ready", 0
 	end
-	
+
 	local seedConfig = SEED_CONFIG[seedType]
 	if not seedConfig then
 		return false, "Invalid seed type", 0
 	end
-	
+
 	local playerData = DataManager.GetPlayerData(player)
 	if not playerData then
 		return false, "Player data not found", 0
 	end
-	
+
 	local totalCost = seedConfig.cost * amount
 	if playerData.coins < totalCost then
 		return false, "Not enough coins", 0
 	end
-	
+
 	-- Deduct coins and add seeds
 	playerData.coins = playerData.coins - totalCost
 	playerData.inventory = playerData.inventory or {}
 	playerData.inventory.seeds = playerData.inventory.seeds or {}
 	playerData.inventory.seeds[seedType] = (playerData.inventory.seeds[seedType] or 0) + amount
-	
+
 	DataManager.SavePlayerData(player, playerData)
 	return true, "Seeds purchased successfully", totalCost
 end
@@ -300,44 +300,44 @@ function GardenSystem.PlantSeed(player, plotIndex, seedType)
 	if not DataManager then
 		return false, "Data system not ready"
 	end
-	
+
 	local userId = player.UserId
 	local plots = playerPlots[userId]
 	if not plots or not plots[plotIndex] then
 		return false, "Plot not found"
 	end
-	
+
 	local plotData = plots[plotIndex]
 	if plotData.seedType then
 		return false, "Plot already occupied"
 	end
-	
+
 	local seedConfig = SEED_CONFIG[seedType]
 	if not seedConfig then
 		return false, "Invalid seed type"
 	end
-	
+
 	local playerData = DataManager.GetPlayerData(player)
 	if not playerData or not playerData.inventory or not playerData.inventory.seeds or 
-	   (playerData.inventory.seeds[seedType] or 0) <= 0 then
+		(playerData.inventory.seeds[seedType] or 0) <= 0 then
 		return false, "No seeds available"
 	end
-	
+
 	-- Plant the seed
 	plotData.seedType = seedType
 	plotData.plantTime = tick()
 	plotData.growthStage = 1
 	plotData.isReady = false
-	
+
 	-- Update visuals
 	plotData.indicator.BrickColor = BrickColor.new("Yellow")
 	GardenSystem.CreateCropVisual(plotData, seedConfig)
 	GardenSystem.StartGrowthTimer(plotData, seedConfig)
-	
+
 	-- Consume seed from inventory
 	playerData.inventory.seeds[seedType] = playerData.inventory.seeds[seedType] - 1
 	DataManager.SavePlayerData(player, playerData)
-	
+
 	debugLog("Planted " .. seedConfig.name .. " in plot " .. plotIndex)
 	return true, "Seed planted successfully"
 end
@@ -348,29 +348,29 @@ function GardenSystem.Harvest(player, plotIndex)
 	if not plots or not plots[plotIndex] then
 		return false, nil, 0, "Plot not found"
 	end
-	
+
 	local plotData = plots[plotIndex]
 	if not plotData.isReady or not plotData.seedType then
 		return false, nil, 0, "Plot not ready for harvest"
 	end
-	
+
 	local seedConfig = SEED_CONFIG[plotData.seedType]
 	local cropType = seedConfig.cropType
 	local quantity = 1
-	
+
 	-- Clear plot
 	plotData.seedType = nil
 	plotData.plantTime = nil
 	plotData.growthStage = 0
 	plotData.isReady = false
-	
+
 	-- Update visuals
 	plotData.indicator.BrickColor = BrickColor.new("Lime green")
 	if plotData.cropModel then
 		plotData.cropModel:Destroy()
 		plotData.cropModel = nil
 	end
-	
+
 	-- Add to player inventory
 	if DataManager then
 		local playerData = DataManager.GetPlayerData(player)
@@ -381,7 +381,7 @@ function GardenSystem.Harvest(player, plotIndex)
 			DataManager.SavePlayerData(player, playerData)
 		end
 	end
-	
+
 	return true, cropType, quantity, "Harvest successful"
 end
 
@@ -389,24 +389,24 @@ function GardenSystem.SellPlant(player, cropType, quantity)
 	if not DataManager then
 		return false, 0, "Data system not ready"
 	end
-	
+
 	local cropConfig = CROP_CONFIG[cropType]
 	if not cropConfig then
 		return false, 0, "Invalid crop type"
 	end
-	
+
 	local playerData = DataManager.GetPlayerData(player)
 	if not playerData or not playerData.inventory or not playerData.inventory.crops or 
-	   (playerData.inventory.crops[cropType] or 0) < quantity then
+		(playerData.inventory.crops[cropType] or 0) < quantity then
 		return false, 0, "Not enough crops to sell"
 	end
-	
+
 	local coinsGained = cropConfig.sellPrice * quantity
-	
+
 	-- Remove crops and add coins
 	playerData.inventory.crops[cropType] = playerData.inventory.crops[cropType] - quantity
 	playerData.coins = (playerData.coins or 0) + coinsGained
-	
+
 	DataManager.SavePlayerData(player, playerData)
 	return true, coinsGained, "Crops sold successfully"
 end
@@ -441,19 +441,19 @@ end
 function GardenSystem.StartGrowthTimer(plotData, seedConfig)
 	spawn(function()
 		wait(seedConfig.growTime)
-		
+
 		-- Crop is ready!
 		plotData.isReady = true
 		plotData.growthStage = 3
-		
+
 		-- Update visual indicators
 		plotData.indicator.BrickColor = BrickColor.new("Bright green")
-		
+
 		if plotData.cropModel then
 			plotData.cropModel.Material = Enum.Material.ForceField
 			plotData.cropModel.Color = Color3.fromRGB(255, 215, 0)
 		end
-		
+
 		debugLog("Crop ready for harvest in plot " .. plotData.plotIndex)
 	end)
 end
@@ -481,7 +481,7 @@ function GardenSystem.GetGrowTimeLeft(plotData)
 	if not plotData.plantTime or not seedConfig then
 		return 0
 	end
-	
+
 	local elapsed = tick() - plotData.plantTime
 	local timeLeft = math.max(0, seedConfig.growTime - elapsed)
 	return math.floor(timeLeft)

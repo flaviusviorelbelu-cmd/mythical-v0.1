@@ -206,7 +206,7 @@ local function createMainUI()
 	coinsLabel.Size = UDim2.new(1, -20, 1, 0)
 	coinsLabel.Position = UDim2.new(0, 10, 0, 0)
 	coinsLabel.BackgroundTransparency = 1
-	coinsLabel.Text = "💰 " .. playerData.coins
+	coinsLabel.Text = "?? " .. playerData.coins
 	coinsLabel.TextColor3 = Color3.new(1, 1, 1)
 	coinsLabel.TextScaled = true
 	coinsLabel.Font = Enum.Font.GothamBold
@@ -230,7 +230,7 @@ local function createMainUI()
 	gemsLabel.Size = UDim2.new(1, -20, 1, 0)
 	gemsLabel.Position = UDim2.new(0, 10, 0, 0)
 	gemsLabel.BackgroundTransparency = 1
-	gemsLabel.Text = "💎 " .. playerData.gems
+	gemsLabel.Text = "?? " .. playerData.gems
 	gemsLabel.TextColor3 = Color3.new(1, 1, 1)
 	gemsLabel.TextScaled = true
 	gemsLabel.Font = Enum.Font.GothamBold
@@ -254,7 +254,7 @@ local function createMainUI()
 	levelLabel.Size = UDim2.new(1, -20, 1, 0)
 	levelLabel.Position = UDim2.new(0, 10, 0, 0)
 	levelLabel.BackgroundTransparency = 1
-	levelLabel.Text = "⭐ Level " .. playerData.level
+	levelLabel.Text = "? Level " .. playerData.level
 	levelLabel.TextColor3 = Color3.new(1, 1, 1)
 	levelLabel.TextScaled = true
 	levelLabel.Font = Enum.Font.GothamBold
@@ -271,10 +271,10 @@ local function createMainUI()
 
 	-- Menu buttons
 	local buttons = {
-		{name = "Shop", color = Color3.fromRGB(46, 204, 113), icon = "🛒"},
-		{name = "Inventory", color = Color3.fromRGB(52, 152, 219), icon = "🎒"},
-		{name = "Pets", color = Color3.fromRGB(155, 89, 182), icon = "🐾"},
-		{name = "Garden", color = Color3.fromRGB(230, 126, 34), icon = "🌱"}
+		{name = "Shop", color = Color3.fromRGB(46, 204, 113), icon = "??"},
+		{name = "Inventory", color = Color3.fromRGB(52, 152, 219), icon = "??"},
+		{name = "Pets", color = Color3.fromRGB(155, 89, 182), icon = "??"},
+		{name = "Garden", color = Color3.fromRGB(230, 126, 34), icon = "??"}
 	}
 
 	for i, buttonData in ipairs(buttons) do
@@ -319,7 +319,7 @@ _G.MainClient = {
 				if coinsFrame then
 					local coinsLabel = coinsFrame:FindFirstChild("CoinsLabel")
 					if coinsLabel then
-						coinsLabel.Text = "💰 " .. tostring(playerData.coins)
+						coinsLabel.Text = "?? " .. tostring(playerData.coins)
 					end
 				end
 
@@ -328,7 +328,7 @@ _G.MainClient = {
 				if gemsFrame then
 					local gemsLabel = gemsFrame:FindFirstChild("GemsLabel")
 					if gemsLabel then
-						gemsLabel.Text = "💎 " .. tostring(playerData.gems)
+						gemsLabel.Text = "?? " .. tostring(playerData.gems)
 					end
 				end
 
@@ -337,7 +337,7 @@ _G.MainClient = {
 				if levelFrame then
 					local levelLabel = levelFrame:FindFirstChild("LevelLabel")
 					if levelLabel then
-						levelLabel.Text = "⭐ Level " .. tostring(playerData.level)
+						levelLabel.Text = "? Level " .. tostring(playerData.level)
 					end
 				end
 

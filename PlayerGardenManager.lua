@@ -47,14 +47,14 @@ function PlayerGardenManager.AssignGarden(player)
 		debugLog("Invalid player for assignment", "ERROR")
 		return nil
 	end
-	
+
 	debugLog("Assigning garden to " .. player.Name)
-	
+
 	-- Check if player already has a garden assigned
 	if playerGardens[player.UserId] then
 		return playerGardens[player.UserId]
 	end
-	
+
 	-- Try to restore from saved data
 	if DataManager then
 		local pdata = DataManager.GetPlayerData(player)
@@ -68,13 +68,13 @@ function PlayerGardenManager.AssignGarden(player)
 			end
 		end
 	end
-	
+
 	-- Find an available garden ID
 	for gid = 1, GARDEN_CONFIG.maxGardens do
 		if not gardenAssignments[gid] then
 			gardenAssignments[gid] = player.UserId
 			playerGardens[player.UserId] = gid
-			
+
 			-- Save to player data
 			if DataManager then
 				local pdata = DataManager.GetPlayerData(player)
@@ -83,12 +83,12 @@ function PlayerGardenManager.AssignGarden(player)
 					DataManager.SavePlayerData(player, pdata)
 				end
 			end
-			
+
 			debugLog("Assigned garden " .. gid .. " to " .. player.Name)
 			return gid
 		end
 	end
-	
+
 	debugLog("No gardens available", "ERROR")
 	return nil
 end
@@ -103,7 +103,7 @@ function PlayerGardenManager.PlantSeed(player, plotIndex, seedType)
 	if not GardenSystem then
 		return false, "Garden system not ready"
 	end
-	
+
 	return GardenSystem.PlantSeed(player, plotIndex, seedType)
 end
 
@@ -111,7 +111,7 @@ function PlayerGardenManager.HarvestPlant(player, plotIndex)
 	if not GardenSystem then
 		return false, "Garden system not ready"
 	end
-	
+
 	return GardenSystem.Harvest(player, plotIndex)
 end
 
@@ -119,21 +119,21 @@ function PlayerGardenManager.GetPlayerPlots(player)
 	if not GardenSystem then
 		return {}
 	end
-	
+
 	return GardenSystem.GetPlayerPlots(player)
 end
 
 -- === PLAYER LIFECYCLE ===
 function PlayerGardenManager.CleanupPlayer(player)
 	local userId = player.UserId
-	
+
 	-- Clean up assignments
 	local gardenId = playerGardens[userId]
 	if gardenId then
 		gardenAssignments[gardenId] = nil
 	end
 	playerGardens[userId] = nil
-	
+
 	debugLog("Cleaned up garden data for " .. player.Name)
 end
 
@@ -144,16 +144,16 @@ Players.PlayerRemoving:Connect(PlayerGardenManager.CleanupPlayer)
 Players.PlayerAdded:Connect(function(player)
 	-- Wait a bit for everything to load
 	task.wait(2)
-	
+
 	local gardenId = PlayerGardenManager.AssignGarden(player)
 	if gardenId then
 		debugLog("Auto-assigned garden " .. gardenId .. " to " .. player.Name .. " on join")
-		
+
 		-- Trigger garden creation through GardenSystem
 		if GardenSystem then
 			GardenSystem.InitializePlayerGarden(player)
 		end
-		
+
 		-- Trigger UI update if available
 		local updateEvent = ReplicatedStorage:FindFirstChild("UpdatePlayerData")
 		if updateEvent and DataManager then

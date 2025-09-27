@@ -219,14 +219,14 @@ end)
 remoteFunctions.GetShopData.OnServerInvoke = function(player)
 	return {
 		seeds = {
-			{id = "basic_seed", name = "Magic Wheat", price = 10, icon = "🌾"},
-			{id = "stellar_seed", name = "Stellar Corn", price = 50, icon = "🌽"},
-			{id = "cosmic_seed", name = "Cosmic Berries", price = 150, icon = "🫐"}
+			{id = "basic_seed", name = "Magic Wheat", price = 10, icon = "??"},
+			{id = "stellar_seed", name = "Stellar Corn", price = 50, icon = "??"},
+			{id = "cosmic_seed", name = "Cosmic Berries", price = 150, icon = "??"}
 		},
 		eggs = {
-			{id = "basic_egg", name = "Common Egg", price = 100, icon = "🥚"},
-			{id = "rare_egg", name = "Rare Egg", price = 500, icon = "🥚"},
-			{id = "legendary_egg", name = "Legendary Egg", price = 1000, icon = "🥚"}
+			{id = "basic_egg", name = "Common Egg", price = 100, icon = "??"},
+			{id = "rare_egg", name = "Rare Egg", price = 500, icon = "??"},
+			{id = "legendary_egg", name = "Legendary Egg", price = 1000, icon = "??"}
 		}
 	}
 end

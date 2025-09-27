@@ -1,6 +1,4 @@
--- InventoryClient.lua (StarterPlayerScripts)
--- Complete inventory system for seeds, crops, and pets
-
+-- InventoryClient.lua (StarterPlayerScripts) - CORRECTED VERSION
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -10,62 +8,93 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 print("[InventoryClient] Initializing inventory system...")
 
--- Wait for remote events
+-- Wait for remote events and functions
 local remoteEvents = {}
 local remoteFunctions = {}
 
-spawn(function()
-	remoteEvents.RequestInventoryUpdate = ReplicatedStorage:WaitForChild("RequestInventoryUpdate")
-	remoteEvents.SellPlantEvent = ReplicatedStorage:WaitForChild("SellPlantEvent")
-	remoteEvents.ShowFeedback = ReplicatedStorage:WaitForChild("ShowFeedback")
-	remoteFunctions.GetPlayerStats = ReplicatedStorage:WaitForChild("GetPlayerStats")
-	remoteFunctions.GetPetData = ReplicatedStorage:WaitForChild("GetPetData")
-	print("[InventoryClient] Remote connections established")
-end)
-
--- Inventory UI variables
+-- Initialize variables BEFORE using them
 local inventoryGui = nil
 local isInventoryOpen = false
 
 -- Sample data structures (will be updated from server)
 local inventoryData = {
 	seeds = {
-		basic_seed = {count = 0, name = "Magic Wheat", icon = "🌾"},
-		stellar_seed = {count = 0, name = "Stellar Corn", icon = "🌽"},
-		cosmic_seed = {count = 0, name = "Cosmic Berries", icon = "🫐"}
+		basic_seed = {count = 0, name = "Magic Wheat", icon = "??"},
+		stellar_seed = {count = 0, name = "Stellar Corn", icon = "??"},
+		cosmic_seed = {count = 0, name = "Cosmic Berries", icon = "??"}
 	},
 	crops = {
-		magic_wheat = {count = 0, name = "Magic Wheat", sellPrice = 15, icon = "🌾"},
-		stellar_corn = {count = 0, name = "Stellar Corn", sellPrice = 80, icon = "🌽"},
-		cosmic_berries = {count = 0, name = "Cosmic Berries", sellPrice = 350, icon = "🫐"}
+		magic_wheat = {count = 0, name = "Magic Wheat", sellPrice = 15, icon = "??"},
+		stellar_corn = {count = 0, name = "Stellar Corn", sellPrice = 80, icon = "??"},
+		cosmic_berries = {count = 0, name = "Cosmic Berries", sellPrice = 350, icon = "??"}
 	},
 	pets = {}
 }
 
+-- DECLARE FUNCTIONS WITH LOCAL FIRST
+local setupInventoryListener
+local updateInventoryFromServer
+local createInventoryUI
+
+-- Setup inventory data listener
+setupInventoryListener = function()
+	print("[InventoryClient] Setting up inventory data listener...")
+
+	-- Listen for manual inventory updates
+	if remoteEvents.RequestInventoryUpdate then
+		remoteEvents.RequestInventoryUpdate.OnClientEvent:Connect(function(data)
+			print("[InventoryClient] Received inventory update event:", data)
+			updateInventoryFromServer()
+		end)
+	end
+end
+
 -- Update inventory data from server
-local function updateInventoryData()
+updateInventoryFromServer = function()
+	print("[InventoryClient] Updating inventory from server...")
+
+	if not remoteFunctions.GetPlayerStats then
+		print("[InventoryClient] ERROR: GetPlayerStats not available")
+		return
+	end
+
 	spawn(function()
-		if remoteFunctions.GetPlayerStats then
-			local success, stats = pcall(function()
-				return remoteFunctions.GetPlayerStats:InvokeServer()
-			end)
+		local success, stats = pcall(function()
+			return remoteFunctions.GetPlayerStats:InvokeServer()
+		end)
 
-			if success and stats then
-				print("[InventoryClient] Received player stats")
-				-- Update inventory counts if available
-				-- Note: You may need to modify server to send inventory data
+		if success and stats then
+			print("[InventoryClient] Received stats from server")
+			print("[InventoryClient] Stats:", stats)
+
+			if stats.inventory and stats.inventory.seeds then
+				print("[InventoryClient] Updating seed inventory:")
+
+				for seedType, count in pairs(stats.inventory.seeds) do
+					if inventoryData.seeds[seedType] then
+						inventoryData.seeds[seedType].count = count
+						print("[InventoryClient]   ", seedType, "=", count)
+					end
+				end
+
+				print("[InventoryClient] Inventory updated successfully!")
+
+				-- Refresh UI if inventory is open
+				if isInventoryOpen then
+					print("[InventoryClient] Refreshing open inventory UI")
+					createInventoryUI() -- Refresh the display
+				end
+			else
+				print("[InventoryClient] No inventory data in server response")
 			end
-		end
-
-		-- Request inventory update
-		if remoteEvents.RequestInventoryUpdate then
-			remoteEvents.RequestInventoryUpdate:FireServer()
+		else
+			print("[InventoryClient] Failed to get stats from server:", stats)
 		end
 	end)
 end
 
 -- Create inventory UI
-local function createInventoryUI()
+createInventoryUI = function()
 	if inventoryGui then inventoryGui:Destroy() end
 
 	-- Main inventory GUI
@@ -101,7 +130,7 @@ local function createInventoryUI()
 	titleLabel.Size = UDim2.new(1, -120, 1, 0)
 	titleLabel.Position = UDim2.new(0, 20, 0, 0)
 	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "🎒 My Inventory"
+	titleLabel.Text = "?? My Inventory"
 	titleLabel.TextColor3 = Color3.new(1, 1, 1)
 	titleLabel.TextScaled = true
 	titleLabel.Font = Enum.Font.GothamBold
@@ -112,7 +141,7 @@ local function createInventoryUI()
 	closeButton.Size = UDim2.new(0, 80, 1, -10)
 	closeButton.Position = UDim2.new(1, -90, 0, 5)
 	closeButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-	closeButton.Text = "❌ Close"
+	closeButton.Text = "? Close"
 	closeButton.TextColor3 = Color3.new(1, 1, 1)
 	closeButton.TextScaled = true
 	closeButton.Font = Enum.Font.GothamBold
@@ -127,62 +156,10 @@ local function createInventoryUI()
 		_G.InventoryClient.ToggleInventory()
 	end)
 
-	-- Tab buttons
-	local tabFrame = Instance.new("Frame")
-	tabFrame.Size = UDim2.new(1, -20, 0, 50)
-	tabFrame.Position = UDim2.new(0, 10, 0, 70)
-	tabFrame.BackgroundTransparency = 1
-	tabFrame.Parent = mainFrame
-
-	local seedTabButton = Instance.new("TextButton")
-	seedTabButton.Size = UDim2.new(0.33, -5, 1, 0)
-	seedTabButton.Position = UDim2.new(0, 0, 0, 0)
-	seedTabButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-	seedTabButton.Text = "🌱 Seeds"
-	seedTabButton.TextColor3 = Color3.new(1, 1, 1)
-	seedTabButton.TextScaled = true
-	seedTabButton.Font = Enum.Font.GothamBold
-	seedTabButton.BorderSizePixel = 0
-	seedTabButton.Parent = tabFrame
-
-	local seedTabCorner = Instance.new("UICorner")
-	seedTabCorner.CornerRadius = UDim.new(0, 8)
-	seedTabCorner.Parent = seedTabButton
-
-	local cropTabButton = Instance.new("TextButton")
-	cropTabButton.Size = UDim2.new(0.33, -5, 1, 0)
-	cropTabButton.Position = UDim2.new(0.33, 2.5, 0, 0)
-	cropTabButton.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
-	cropTabButton.Text = "🌾 Crops"
-	cropTabButton.TextColor3 = Color3.new(1, 1, 1)
-	cropTabButton.TextScaled = true
-	cropTabButton.Font = Enum.Font.GothamBold
-	cropTabButton.BorderSizePixel = 0
-	cropTabButton.Parent = tabFrame
-
-	local cropTabCorner = Instance.new("UICorner")
-	cropTabCorner.CornerRadius = UDim.new(0, 8)
-	cropTabCorner.Parent = cropTabButton
-
-	local petTabButton = Instance.new("TextButton")
-	petTabButton.Size = UDim2.new(0.33, -5, 1, 0)
-	petTabButton.Position = UDim2.new(0.66, 5, 0, 0)
-	petTabButton.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
-	petTabButton.Text = "🐾 Pets"
-	petTabButton.TextColor3 = Color3.new(1, 1, 1)
-	petTabButton.TextScaled = true
-	petTabButton.Font = Enum.Font.GothamBold
-	petTabButton.BorderSizePixel = 0
-	petTabButton.Parent = tabFrame
-
-	local petTabCorner = Instance.new("UICorner")
-	petTabCorner.CornerRadius = UDim.new(0, 8)
-	petTabCorner.Parent = petTabButton
-
-	-- Content frame
+	-- Content frame for seeds
 	local contentFrame = Instance.new("ScrollingFrame")
-	contentFrame.Size = UDim2.new(1, -20, 1, -140)
-	contentFrame.Position = UDim2.new(0, 10, 0, 130)
+	contentFrame.Size = UDim2.new(1, -20, 1, -80)
+	contentFrame.Position = UDim2.new(0, 10, 0, 70)
 	contentFrame.BackgroundColor3 = Color3.fromRGB(52, 73, 94)
 	contentFrame.BorderSizePixel = 0
 	contentFrame.ScrollBarThickness = 8
@@ -192,235 +169,78 @@ local function createInventoryUI()
 	contentCorner.CornerRadius = UDim.new(0, 12)
 	contentCorner.Parent = contentFrame
 
-	-- Create seeds tab
-	local function createSeedsTab()
-		contentFrame:ClearAllChildren()
+	-- Create seed display
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.Padding = UDim.new(0, 10)
+	listLayout.Parent = contentFrame
 
-		local gridLayout = Instance.new("UIGridLayout")
-		gridLayout.CellSize = UDim2.new(0, 200, 0, 120)
-		gridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
-		gridLayout.Parent = contentFrame
+	print("[InventoryClient] Creating seed display...")
+	for seedType, seedData in pairs(inventoryData.seeds) do
+		local itemFrame = Instance.new("Frame")
+		itemFrame.Size = UDim2.new(1, -20, 0, 80)
+		itemFrame.BackgroundColor3 = Color3.fromRGB(44, 62, 80)
+		itemFrame.BorderSizePixel = 0
+		itemFrame.Parent = contentFrame
 
-		for seedType, seedData in pairs(inventoryData.seeds) do
-			local itemFrame = Instance.new("Frame")
-			itemFrame.BackgroundColor3 = Color3.fromRGB(44, 62, 80)
-			itemFrame.BorderSizePixel = 0
-			itemFrame.Parent = contentFrame
+		local itemCorner = Instance.new("UICorner")
+		itemCorner.CornerRadius = UDim.new(0, 12)
+		itemCorner.Parent = itemFrame
 
-			local itemCorner = Instance.new("UICorner")
-			itemCorner.CornerRadius = UDim.new(0, 12)
-			itemCorner.Parent = itemFrame
+		-- Item icon
+		local iconLabel = Instance.new("TextLabel")
+		iconLabel.Size = UDim2.new(0, 60, 1, 0)
+		iconLabel.BackgroundTransparency = 1
+		iconLabel.Text = seedData.icon
+		iconLabel.TextScaled = true
+		iconLabel.Parent = itemFrame
 
-			-- Item icon
-			local iconLabel = Instance.new("TextLabel")
-			iconLabel.Size = UDim2.new(1, 0, 0, 40)
-			iconLabel.Position = UDim2.new(0, 0, 0, 10)
-			iconLabel.BackgroundTransparency = 1
-			iconLabel.Text = seedData.icon
-			iconLabel.TextScaled = true
-			iconLabel.Parent = itemFrame
+		-- Item name and count
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Size = UDim2.new(1, -70, 1, 0)
+		nameLabel.Position = UDim2.new(0, 70, 0, 0)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.Text = seedData.name .. " (x" .. seedData.count .. ")"
+		nameLabel.TextColor3 = Color3.new(1, 1, 1)
+		nameLabel.TextScaled = true
+		nameLabel.Font = Enum.Font.GothamBold
+		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+		nameLabel.Parent = itemFrame
 
-			-- Item name
-			local nameLabel = Instance.new("TextLabel")
-			nameLabel.Size = UDim2.new(1, -10, 0, 25)
-			nameLabel.Position = UDim2.new(0, 5, 0, 50)
-			nameLabel.BackgroundTransparency = 1
-			nameLabel.Text = seedData.name
-			nameLabel.TextColor3 = Color3.new(1, 1, 1)
-			nameLabel.TextScaled = true
-			nameLabel.Font = Enum.Font.GothamBold
-			nameLabel.Parent = itemFrame
+		-- Highlight if player has seeds
+		if seedData.count > 0 then
+			itemFrame.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
 
-			-- Item count
-			local countLabel = Instance.new("TextLabel")
-			countLabel.Size = UDim2.new(1, -10, 0, 25)
-			countLabel.Position = UDim2.new(0, 5, 0, 75)
-			countLabel.BackgroundTransparency = 1
-			countLabel.Text = "Count: " .. seedData.count
-			countLabel.TextColor3 = Color3.fromRGB(149, 165, 166)
-			countLabel.TextScaled = true
-			countLabel.Font = Enum.Font.Gotham
-			countLabel.Parent = itemFrame
-
-			-- Glow effect if player has seeds
-			if seedData.count > 0 then
-				itemFrame.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-
-				local glowEffect = Instance.new("UIStroke")
-				glowEffect.Color = Color3.fromRGB(46, 204, 113)
-				glowEffect.Thickness = 2
-				glowEffect.Parent = itemFrame
-			end
+			local glowEffect = Instance.new("UIStroke")
+			glowEffect.Color = Color3.fromRGB(46, 204, 113)
+			glowEffect.Thickness = 2
+			glowEffect.Parent = itemFrame
 		end
 
-		contentFrame.CanvasSize = UDim2.new(0, 0, 0, gridLayout.AbsoluteContentSize.Y + 20)
+		print("[InventoryClient] Created display for:", seedType, "count:", seedData.count)
 	end
 
-	-- Create crops tab
-	local function createCropsTab()
-		contentFrame:ClearAllChildren()
-
-		local listLayout = Instance.new("UIListLayout")
-		listLayout.Padding = UDim.new(0, 10)
-		listLayout.Parent = contentFrame
-
-		for cropType, cropData in pairs(inventoryData.crops) do
-			local itemFrame = Instance.new("Frame")
-			itemFrame.Size = UDim2.new(1, -20, 0, 100)
-			itemFrame.BackgroundColor3 = Color3.fromRGB(44, 62, 80)
-			itemFrame.BorderSizePixel = 0
-			itemFrame.Parent = contentFrame
-
-			local itemCorner = Instance.new("UICorner")
-			itemCorner.CornerRadius = UDim.new(0, 12)
-			itemCorner.Parent = itemFrame
-
-			-- Item icon
-			local iconLabel = Instance.new("TextLabel")
-			iconLabel.Size = UDim2.new(0, 80, 1, 0)
-			iconLabel.BackgroundTransparency = 1
-			iconLabel.Text = cropData.icon
-			iconLabel.TextScaled = true
-			iconLabel.Parent = itemFrame
-
-			-- Item details
-			local nameLabel = Instance.new("TextLabel")
-			nameLabel.Size = UDim2.new(0, 250, 0, 30)
-			nameLabel.Position = UDim2.new(0, 90, 0, 10)
-			nameLabel.BackgroundTransparency = 1
-			nameLabel.Text = cropData.name
-			nameLabel.TextColor3 = Color3.new(1, 1, 1)
-			nameLabel.TextScaled = true
-			nameLabel.Font = Enum.Font.GothamBold
-			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-			nameLabel.Parent = itemFrame
-
-			local countLabel = Instance.new("TextLabel")
-			countLabel.Size = UDim2.new(0, 250, 0, 25)
-			countLabel.Position = UDim2.new(0, 90, 0, 40)
-			countLabel.BackgroundTransparency = 1
-			countLabel.Text = "Count: " .. cropData.count
-			countLabel.TextColor3 = Color3.fromRGB(149, 165, 166)
-			countLabel.TextScaled = true
-			countLabel.Font = Enum.Font.Gotham
-			countLabel.TextXAlignment = Enum.TextXAlignment.Left
-			countLabel.Parent = itemFrame
-
-			local priceLabel = Instance.new("TextLabel")
-			priceLabel.Size = UDim2.new(0, 250, 0, 25)
-			priceLabel.Position = UDim2.new(0, 90, 0, 65)
-			priceLabel.BackgroundTransparency = 1
-			priceLabel.Text = "💰 " .. cropData.sellPrice .. " coins each"
-			priceLabel.TextColor3 = Color3.fromRGB(241, 196, 15)
-			priceLabel.TextScaled = true
-			priceLabel.Font = Enum.Font.Gotham
-			priceLabel.TextXAlignment = Enum.TextXAlignment.Left
-			priceLabel.Parent = itemFrame
-
-			-- Sell button (only if player has crops)
-			if cropData.count > 0 then
-				itemFrame.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
-
-				local sellButton = Instance.new("TextButton")
-				sellButton.Size = UDim2.new(0, 120, 0, 40)
-				sellButton.Position = UDim2.new(1, -130, 0.5, -20)
-				sellButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-				sellButton.Text = "Sell All"
-				sellButton.TextColor3 = Color3.new(1, 1, 1)
-				sellButton.TextScaled = true
-				sellButton.Font = Enum.Font.GothamBold
-				sellButton.BorderSizePixel = 0
-				sellButton.Parent = itemFrame
-
-				local sellCorner = Instance.new("UICorner")
-				sellCorner.CornerRadius = UDim.new(0, 8)
-				sellCorner.Parent = sellButton
-
-				sellButton.MouseButton1Click:Connect(function()
-					print("[InventoryClient] Selling", cropData.count, cropType)
-					if remoteEvents.SellPlantEvent then
-						remoteEvents.SellPlantEvent:FireServer(cropType, cropData.count)
-						-- Update local count
-						cropData.count = 0
-						createCropsTab() -- Refresh display
-					end
-				end)
-
-				local glowEffect = Instance.new("UIStroke")
-				glowEffect.Color = Color3.fromRGB(230, 126, 34)
-				glowEffect.Thickness = 2
-				glowEffect.Parent = itemFrame
-			end
-		end
-
-		contentFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 20)
-	end
-
-	-- Create pets tab
-	local function createPetsTab()
-		contentFrame:ClearAllChildren()
-
-		local noItemsLabel = Instance.new("TextLabel")
-		noItemsLabel.Size = UDim2.new(1, 0, 0, 100)
-		noItemsLabel.Position = UDim2.new(0, 0, 0.4, 0)
-		noItemsLabel.BackgroundTransparency = 1
-		noItemsLabel.Text = "🐾\n\nNo pets yet!\nHatch some eggs to get pets."
-		noItemsLabel.TextColor3 = Color3.fromRGB(149, 165, 166)
-		noItemsLabel.TextScaled = true
-		noItemsLabel.Font = Enum.Font.Gotham
-		noItemsLabel.Parent = contentFrame
-
-		contentFrame.CanvasSize = UDim2.new(0, 0, 0, 200)
-	end
-
-	-- Tab button events
-	seedTabButton.MouseButton1Click:Connect(createSeedsTab)
-	cropTabButton.MouseButton1Click:Connect(createCropsTab)
-	petTabButton.MouseButton1Click:Connect(createPetsTab)
-
-	-- Start with seeds tab
-	createSeedsTab()
-
-	-- Animation
-	mainFrame.Position = UDim2.new(0.5, -450, 1, 0)
-	local openTween = TweenService:Create(
-		mainFrame,
-		TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{Position = UDim2.new(0.5, -450, 0.5, -350)}
-	)
-	openTween:Play()
+	contentFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 20)
 end
 
--- Listen for inventory updates from server
+-- Wait for RemoteEvents and Functions
 spawn(function()
-	local requestInventoryUpdateEvent = ReplicatedStorage:WaitForChild("RequestInventoryUpdate")
-	requestInventoryUpdateEvent.OnClientEvent:Connect(function(data)
-		print("[InventoryClient] Received inventory update:", data)
-		if data and data.inventory then
-			-- Update local inventory data
-			if data.inventory.seeds then
-				for seedType, count in pairs(data.inventory.seeds) do
-					if inventoryData.seeds[seedType] then
-						inventoryData.seeds[seedType].count = count
-					end
-				end
-			end
+	print("[InventoryClient] Waiting for RemoteEvents...")
 
-			if data.inventory.crops then
-				for cropType, count in pairs(data.inventory.crops) do
-					if inventoryData.crops[cropType] then
-						inventoryData.crops[cropType].count = count
-					end
-				end
-			end
+	-- Wait for RemoteEvents
+	remoteEvents.RequestInventoryUpdate = ReplicatedStorage:WaitForChild("RequestInventoryUpdate", 10)
+	remoteEvents.SellPlantEvent = ReplicatedStorage:WaitForChild("SellPlantEvent", 10)
+	remoteEvents.ShowFeedback = ReplicatedStorage:WaitForChild("ShowFeedback", 10)
 
-			-- Refresh UI if open
-			if isInventoryOpen and inventoryGui then
-				print("[InventoryClient] Refreshing inventory display")
-				-- You would need to refresh the current tab here
-			end
-		end
-	end)
+	-- Wait for RemoteFunctions
+	remoteFunctions.GetPlayerStats = ReplicatedStorage:WaitForChild("GetPlayerStats", 10)
+
+	if remoteFunctions.GetPlayerStats then
+		print("[InventoryClient] Remote connections established successfully!")
+		setupInventoryListener()
+	else
+		print("[InventoryClient] ERROR: Failed to connect to GetPlayerStats")
+		return
+	end
 end)
 
 -- === PUBLIC FUNCTIONS ===
@@ -447,7 +267,7 @@ _G.InventoryClient = {
 			print("[InventoryClient] Inventory closed")
 		else
 			-- Open inventory
-			updateInventoryData() -- Refresh data from server
+			updateInventoryFromServer() -- Refresh data from server
 			createInventoryUI()
 			isInventoryOpen = true
 			print("[InventoryClient] Inventory opened")

@@ -40,16 +40,16 @@ local connection = nil
 -- Player inventory data
 local playerInventory = {
     seeds = {
-        basic_seed = {count = 0, name = "Magic Wheat", plantTime = 30, icon = "🌾"},
-        stellar_seed = {count = 0, name = "Stellar Corn", plantTime = 60, icon = "🌽"},
-        cosmic_seed = {count = 0, name = "Cosmic Berries", plantTime = 120, icon = "🫐"}
+        basic_seed = {count = 0, name = "Magic Wheat", plantTime = 30, icon = "??"},
+        stellar_seed = {count = 0, name = "Stellar Corn", plantTime = 60, icon = "??"},
+        cosmic_seed = {count = 0, name = "Cosmic Berries", plantTime = 120, icon = "??"}
     }
 }
 
 -- Garden plot data
 local gardenPlots = {}
 
--- Update player inventory
+-- In GardenClient.lua, replace the updateInventoryData function:
 local function updateInventoryData()
 	print("[GardenClient] Updating inventory data...")
 
@@ -60,35 +60,39 @@ local function updateInventoryData()
 			end)
 
 			if success and stats then
-				print("[GardenClient] Received stats from server:", stats)
+				print("[GardenClient] Received stats from server")
+				print("[GardenClient] Stats structure:", stats)
 
 				if stats.inventory and stats.inventory.seeds then
-					print("[GardenClient] Updating seed inventory:", stats.inventory.seeds)
+					print("[GardenClient] Found inventory.seeds:", stats.inventory.seeds)
+
+					-- Update each seed type explicitly
 					for seedType, count in pairs(stats.inventory.seeds) do
 						if playerInventory.seeds[seedType] then
 							playerInventory.seeds[seedType].count = count
-							print("[GardenClient] Updated", seedType, "to count:", count)
+							print("[GardenClient] Updated", seedType, "count to:", count)
 						end
 					end
-				else
-					-- If no inventory data, set test values for now
-					print("[GardenClient] No inventory data from server, using test values")
-					playerInventory.seeds.basic_seed.count = 5
-					playerInventory.seeds.stellar_seed.count = 3
-					playerInventory.seeds.cosmic_seed.count = 1
-				end
 
-				print("[GardenClient] Final inventory:", playerInventory.seeds)
+					print("[GardenClient] Final playerInventory.seeds:")
+					for seedType, seedData in pairs(playerInventory.seeds) do
+						print("  ", seedType, "=", seedData.count)
+					end
+				else
+					print("[GardenClient] NO inventory.seeds found in server response")
+					if stats.inventory then
+						print("[GardenClient] Inventory exists but no seeds:", stats.inventory)
+					else
+						print("[GardenClient] No inventory at all in response")
+					end
+				end
 			else
-				print("[GardenClient] Failed to get stats, using test values")
-				-- Use test values if server call fails
-				playerInventory.seeds.basic_seed.count = 5
-				playerInventory.seeds.stellar_seed.count = 3
-				playerInventory.seeds.cosmic_seed.count = 1
+				print("[GardenClient] Failed to get stats from server")
 			end
 		end
 	end)
 end
+
 
 
 -- Get garden plot data
@@ -167,7 +171,7 @@ local function createPlotInteractionUI(plot, plotData)
 	titleLabel.Size = UDim2.new(1, -60, 0, 40)
 	titleLabel.Position = UDim2.new(0, 10, 0, 10)
 	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "🌱 Garden Plot " .. (plotData.plotNumber or "?")
+	titleLabel.Text = "?? Garden Plot " .. (plotData.plotNumber or "?")
 	titleLabel.TextColor3 = Color3.new(1, 1, 1)
 	titleLabel.TextScaled = true
 	titleLabel.Font = Enum.Font.GothamBold
@@ -203,7 +207,7 @@ local function createPlotInteractionUI(plot, plotData)
 			noSeedsLabel.Size = UDim2.new(1, -20, 0, 80)
 			noSeedsLabel.Position = UDim2.new(0, 10, 0, 90)
 			noSeedsLabel.BackgroundTransparency = 1
-			noSeedsLabel.Text = "🛒 No seeds available!\n\nVisit the shop to buy seeds first."
+			noSeedsLabel.Text = "?? No seeds available!\n\nVisit the shop to buy seeds first."
 			noSeedsLabel.TextColor3 = Color3.fromRGB(230, 126, 34)
 			noSeedsLabel.TextScaled = true
 			noSeedsLabel.Font = Enum.Font.Gotham
@@ -268,14 +272,14 @@ local function createPlotInteractionUI(plot, plotData)
 
 	elseif plotData.isReady then
 		-- Ready to harvest
-		statusLabel.Text = "🌟 Ready to harvest!"
+		statusLabel.Text = "?? Ready to harvest!"
 		statusLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
 
 		local harvestButton = Instance.new("TextButton")
 		harvestButton.Size = UDim2.new(0, 200, 0, 40)
 		harvestButton.Position = UDim2.new(0.5, -100, 0, 100)
 		harvestButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-		harvestButton.Text = "🌾 Harvest Crop"
+		harvestButton.Text = "?? Harvest Crop"
 		harvestButton.TextColor3 = Color3.new(1, 1, 1)
 		harvestButton.TextScaled = true
 		harvestButton.Font = Enum.Font.GothamBold
@@ -298,7 +302,7 @@ local function createPlotInteractionUI(plot, plotData)
 	else
 		-- Growing
 		local timeLeft = plotData.timeRemaining or 0
-		statusLabel.Text = "🌱 Growing... " .. math.floor(timeLeft) .. "s remaining"
+		statusLabel.Text = "?? Growing... " .. math.floor(timeLeft) .. "s remaining"
 		statusLabel.TextColor3 = Color3.fromRGB(230, 126, 34)
 
 		local progressFrame = Instance.new("Frame")
@@ -328,7 +332,7 @@ local function createPlotInteractionUI(plot, plotData)
 	closeButton.Size = UDim2.new(0, 40, 0, 30)
 	closeButton.Position = UDim2.new(1, -50, 0, 10)
 	closeButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-	closeButton.Text = "❌"
+	closeButton.Text = "?"
 	closeButton.TextColor3 = Color3.new(1, 1, 1)
 	closeButton.TextScaled = true
 	closeButton.Font = Enum.Font.GothamBold
@@ -466,7 +470,7 @@ local function createGardenUI()
     titleLabel.Size = UDim2.new(1, -120, 1, 0)
     titleLabel.Position = UDim2.new(0, 20, 0, 0)
     titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = "🌱 My Garden"
+    titleLabel.Text = "?? My Garden"
     titleLabel.TextColor3 = Color3.new(1, 1, 1)
     titleLabel.TextScaled = true
     titleLabel.Font = Enum.Font.GothamBold
@@ -477,7 +481,7 @@ local function createGardenUI()
     closeButton.Size = UDim2.new(0, 80, 1, -10)
     closeButton.Position = UDim2.new(1, -90, 0, 5)
     closeButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-    closeButton.Text = "❌ Close"
+    closeButton.Text = "? Close"
     closeButton.TextColor3 = Color3.new(1, 1, 1)
     closeButton.TextScaled = true
     closeButton.Font = Enum.Font.GothamBold
@@ -509,7 +513,7 @@ local function createGardenUI()
     instructionLabel.Size = UDim2.new(1, -20, 0, 100)
     instructionLabel.Position = UDim2.new(0, 10, 0, 20)
     instructionLabel.BackgroundTransparency = 1
-    instructionLabel.Text = "🌱 Welcome to your garden!\n\n• Click on any plot to plant seeds or harvest crops\n• Buy seeds from the shop first\n• Watch your plants grow over time"
+    instructionLabel.Text = "?? Welcome to your garden!\n\n� Click on any plot to plant seeds or harvest crops\n� Buy seeds from the shop first\n� Watch your plants grow over time"
     instructionLabel.TextColor3 = Color3.new(1, 1, 1)
     instructionLabel.TextScaled = true
     instructionLabel.Font = Enum.Font.Gotham
@@ -520,7 +524,7 @@ local function createGardenUI()
     teleportButton.Size = UDim2.new(0, 200, 0, 50)
     teleportButton.Position = UDim2.new(0.5, -100, 0, 150)
     teleportButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-    teleportButton.Text = "🏡 Go to My Garden"
+    teleportButton.Text = "?? Go to My Garden"
     teleportButton.TextColor3 = Color3.new(1, 1, 1)
     teleportButton.TextScaled = true
     teleportButton.Font = Enum.Font.GothamBold
@@ -553,7 +557,7 @@ local function createGardenUI()
     statsLabel.Size = UDim2.new(1, -20, 0, 80)
     statsLabel.Position = UDim2.new(0, 10, 0, 220)
     statsLabel.BackgroundTransparency = 1
-    statsLabel.Text = "📊 Garden Statistics\n\nPlots: 9 | Active: 0 | Ready: 0"
+    statsLabel.Text = "?? Garden Statistics\n\nPlots: 9 | Active: 0 | Ready: 0"
     statsLabel.TextColor3 = Color3.fromRGB(149, 165, 166)
     statsLabel.TextScaled = true
     statsLabel.Font = Enum.Font.Gotham
