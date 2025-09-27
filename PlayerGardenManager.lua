@@ -1,22 +1,12 @@
---PlayerGardenManager.lua
--- PlayerGardenManager Module (ServerScriptService)
--- Enhanced with debugging, proper garden assignment, and plot management
-local Players            = game:GetService("Players")
-local ReplicatedStorage  = game:GetService("ReplicatedStorage")
-local DEBUG_MODE         = true
+-- PlayerGardenManager.lua (ServerScriptService)
+-- Simplified wrapper that delegates to the main GardenSystem
 
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Wait for environment initialization
-local envEvent = ReplicatedStorage:WaitForChild("EnvironmentInitialized", 30)
-if envEvent then
-	envEvent.Event:Wait()
-else
-	warn("EnvironmentInitialized event missing ? proceeding anyway")
-end
+local PlayerGardenManager = {}
 
--- Ensure MapGenerator API exists
-assert(_G.MapGenerator and _G.MapGenerator.plantSeed and _G.MapGenerator.harvestPlant and _G.MapGenerator.getAllPlots,
-	"MapGenerator API missing in PlayerGardenManager")
+local DEBUG_MODE = true
 
 -- Debug logging
 local function debugLog(message, level)
@@ -26,185 +16,145 @@ local function debugLog(message, level)
 	end
 end
 
--- Get workspace and Gardens folder
-local workspace       = game:GetService("Workspace")
-local gardensFolder = workspace:FindFirstChild("Gardens")
-if not gardensFolder then
-	-- Try to find gardens directly in workspace
-	gardensFolder = workspace
-	debugLog("Using workspace as gardens folder (Gardens folder not found)", "WARN")
-end
+-- Wait for GardenSystem to load
+local GardenSystem
+spawn(function()
+	GardenSystem = require(script.Parent:WaitForChild("GardenSystem"))
+	debugLog("GardenSystem loaded successfully")
+end)
 
+-- Safe require for DataManager
+local DataManager
+spawn(function()
+	DataManager = require(script.Parent:WaitForChild("DataManager"))
+end)
 
-
-local PlayerGardenManager = {}
-
--- Safe require
-local function safeRequire(moduleName)
-	local ok, mod = pcall(function()
-		return require(game.ServerScriptService:WaitForChild(moduleName, 10))
-	end)
-	if not ok then
-		debugLog("Module not available: " .. moduleName, "WARN")
-		return nil
-	end
-	return mod
-end
-
-local DataManager = safeRequire("DataManager")
-
--- Track assignments
+-- Track garden assignments for compatibility
 local gardenAssignments = {}  -- gardenId -> userId
-local playerGardens      = {}  -- userId   -> gardenId
+local playerGardens = {}      -- userId -> gardenId
 
 -- Configuration
 local GARDEN_CONFIG = {
-	maxGardens      = 8,
-	plotsPerGarden  = 9,
-	plotGrowthTime  = 180,
+	maxGardens = 12,  -- Increased to handle more players
+	plotsPerGarden = 9,
+	plotGrowthTime = 180,
 	maxGrowthStages = 3,
 }
 
--- Assign garden to player
+-- === GARDEN ASSIGNMENT (For compatibility with existing code) ===
 function PlayerGardenManager.AssignGarden(player)
 	if not player or not player.UserId then
 		debugLog("Invalid player for assignment", "ERROR")
 		return nil
 	end
+	
 	debugLog("Assigning garden to " .. player.Name)
+	
+	-- Check if player already has a garden assigned
 	if playerGardens[player.UserId] then
 		return playerGardens[player.UserId]
 	end
+	
+	-- Try to restore from saved data
 	if DataManager then
 		local pdata = DataManager.GetPlayerData(player)
 		if pdata and pdata.assignedGarden and pdata.assignedGarden > 0 then
 			local gid = pdata.assignedGarden
 			if not gardenAssignments[gid] or gardenAssignments[gid] == player.UserId then
-				gardenAssignments[gid]  = player.UserId
+				gardenAssignments[gid] = player.UserId
 				playerGardens[player.UserId] = gid
-				local gf = gardensFolder:FindFirstChild("Garden" .. gid)
-				if gf then
-					gf:SetAttribute("OwnerId", player.UserId)
-					gf:SetAttribute("OwnerName", player.Name)
-				end
+				debugLog("Restored garden " .. gid .. " for " .. player.Name)
 				return gid
 			end
 		end
 	end
+	
+	-- Find an available garden ID
 	for gid = 1, GARDEN_CONFIG.maxGardens do
 		if not gardenAssignments[gid] then
-			local gf = gardensFolder:FindFirstChild("Garden" .. gid)
-			if gf then
-				gardenAssignments[gid]      = player.UserId
-				playerGardens[player.UserId] = gid
-				gf:SetAttribute("OwnerId", player.UserId)
-				gf:SetAttribute("OwnerName", player.Name)
-				if DataManager then
-					local pdata = DataManager.GetPlayerData(player)
-					if pdata then
-						pdata.assignedGarden = gid
-						DataManager.SavePlayerData(player, pdata)
-					end
+			gardenAssignments[gid] = player.UserId
+			playerGardens[player.UserId] = gid
+			
+			-- Save to player data
+			if DataManager then
+				local pdata = DataManager.GetPlayerData(player)
+				if pdata then
+					pdata.assignedGarden = gid
+					DataManager.SavePlayerData(player, pdata)
 				end
-				debugLog("Assigned garden " .. gid .. " to " .. player.Name)
-				return gid
-			else
-				debugLog("Garden folder missing: " .. gid, "WARN")
 			end
+			
+			debugLog("Assigned garden " .. gid .. " to " .. player.Name)
+			return gid
 		end
 	end
+	
 	debugLog("No gardens available", "ERROR")
 	return nil
 end
 
--- Get or assign garden
 function PlayerGardenManager.GetPlayerGarden(player)
 	if not player or not player.UserId then return nil end
 	return playerGardens[player.UserId] or PlayerGardenManager.AssignGarden(player)
 end
 
--- Plant seed
+-- === FARMING OPERATIONS (Delegate to GardenSystem) ===
 function PlayerGardenManager.PlantSeed(player, plotIndex, seedType)
-	if not player or not plotIndex or not seedType then
-		debugLog("Invalid PlantSeed params", "ERROR")
-		return false, "Invalid parameters"
+	if not GardenSystem then
+		return false, "Garden system not ready"
 	end
-	local gid = PlayerGardenManager.GetPlayerGarden(player)
-	if not gid then
-		return false, "No garden assigned"
-	end
-	if DataManager then
-		local pdata = DataManager.GetPlayerData(player)
-		if not pdata or not pdata.seeds or (pdata.seeds[seedType] or 0) <= 0 then
-			return false, "No seeds"
-		end
-		local key = gid .. "_" .. plotIndex
-		local ok = _G.MapGenerator.plantSeed(key, seedType, player.UserId)
-		if ok then
-			pdata.seeds[seedType] = pdata.seeds[seedType] - 1
-			DataManager.SavePlayerData(player, pdata)
-			return true, "Planted"
-		else
-			return false, "Plot unavailable"
-		end
-	end
-	return false, "Data unavailable"
+	
+	return GardenSystem.PlantSeed(player, plotIndex, seedType)
 end
 
--- Harvest plant
 function PlayerGardenManager.HarvestPlant(player, plotIndex)
-	if not player or not plotIndex then
-		return false, "Invalid parameters"
+	if not GardenSystem then
+		return false, "Garden system not ready"
 	end
-	local gid = PlayerGardenManager.GetPlayerGarden(player)
-	if not gid then
-		return false, "No garden assigned"
-	end
-	local key = gid .. "_" .. plotIndex
-	local htype = _G.MapGenerator.harvestPlant(key)
-	if htype and DataManager then
-		local pdata = DataManager.GetPlayerData(player)
-		pdata.harvest = pdata.harvest or {}
-		pdata.harvest[htype] = (pdata.harvest[htype] or 0) + 1
-		DataManager.SavePlayerData(player, pdata)
-		return true, htype
-	end
-	return false, "Plot not ready"
+	
+	return GardenSystem.Harvest(player, plotIndex)
 end
 
--- Get all plots for player
 function PlayerGardenManager.GetPlayerPlots(player)
-	local gid = PlayerGardenManager.GetPlayerGarden(player)
-	if not gid then return {} end
-	local all = _G.MapGenerator.getAllPlots()
-	local out = {}
-	for k,v in pairs(all) do
-		if k:match("^" .. gid .. "_") then
-			out[k] = v
-		end
+	if not GardenSystem then
+		return {}
 	end
-	return out
+	
+	return GardenSystem.GetPlayerPlots(player)
 end
 
--- Cleanup on leave
+-- === PLAYER LIFECYCLE ===
 function PlayerGardenManager.CleanupPlayer(player)
-	playerGardens[player.UserId] = nil
+	local userId = player.UserId
+	
+	-- Clean up assignments
+	local gardenId = playerGardens[userId]
+	if gardenId then
+		gardenAssignments[gardenId] = nil
+	end
+	playerGardens[userId] = nil
+	
+	debugLog("Cleaned up garden data for " .. player.Name)
 end
+
+-- Connect to player events
 Players.PlayerRemoving:Connect(PlayerGardenManager.CleanupPlayer)
 
--- Export API
-_G.PlayerGardenManager = PlayerGardenManager
-debugLog("PlayerGardenManager loaded")
-
--- Add this to the bottom of PlayerGardenManager.lua
+-- Auto-assign gardens when players join
 Players.PlayerAdded:Connect(function(player)
-	task.wait(2) -- Wait for everything to load
-
+	-- Wait a bit for everything to load
+	task.wait(2)
+	
 	local gardenId = PlayerGardenManager.AssignGarden(player)
 	if gardenId then
-		debugLog("Auto-assigned garden "..gardenId.." to "..player.Name.." on join")
-
-		-- Trigger UI update
+		debugLog("Auto-assigned garden " .. gardenId .. " to " .. player.Name .. " on join")
+		
+		-- Trigger garden creation through GardenSystem
+		if GardenSystem then
+			GardenSystem.InitializePlayerGarden(player)
+		end
+		
+		-- Trigger UI update if available
 		local updateEvent = ReplicatedStorage:FindFirstChild("UpdatePlayerData")
 		if updateEvent and DataManager then
 			local playerData = DataManager.GetPlayerData(player)
@@ -213,8 +163,11 @@ Players.PlayerAdded:Connect(function(player)
 			end
 		end
 	else
-		debugLog("Failed to assign garden to "..player.Name, "ERROR")
+		debugLog("Failed to assign garden to " .. player.Name, "ERROR")
 	end
 end)
 
+-- Export for compatibility
+_G.PlayerGardenManager = PlayerGardenManager
+debugLog("PlayerGardenManager loaded successfully")
 return PlayerGardenManager
