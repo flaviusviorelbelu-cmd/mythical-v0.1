@@ -1,9 +1,10 @@
 -- RemoteEventHandler.lua (ServerScriptService)
--- Handles all client-server communication for the pet system
+-- Handles all client-server communication for the pet and garden systems
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
+-- Wait for modules to load
 local EggManager = require(script.Parent:WaitForChild("EggManager"))
 local PetInventoryManager = require(script.Parent:WaitForChild("PetInventoryManager"))
 local PetVisualSystem = require(script.Parent:WaitForChild("PetVisualSystem"))
@@ -50,9 +51,9 @@ local gardenSystemEvents = {
 	"RequestInventoryUpdate",
 	"ShowPlotOptionsEvent",
 	"SellPlantEvent",
-	"ShowPlotOptionsEvent",
 	"PlayerGardenSystem"
 }
+
 for _, eventName in ipairs(petSystemEvents) do
 	createRemoteEvent(eventName)
 	print("Event Created ", eventName)
@@ -70,10 +71,7 @@ local getShopDataFunc = createRemoteFunction("GetShopData")
 local getGardenPlots = createRemoteFunction("GetGardenPlots")
 
 getGardenPlots.OnServerInvoke = function(player, userIdOrGardenId)
-	-- Daca vrei dupa userId:
 	return GardenSystem.GetPlayerPlots(player)
-	-- Sau daca vrei dupa gardenId:
-	-- return GardenSystem.GetGardenPlots(gardenId)
 end
 
 -- Validation functions
@@ -124,7 +122,7 @@ local function checkRateLimit(player, action)
 	return true
 end
 
--- Event Handlers
+-- === PET SYSTEM EVENT HANDLERS ===
 
 -- Buy Egg Handler
 remoteEvents.BuyEgg.OnServerEvent:Connect(function(player, eggType)
@@ -207,7 +205,6 @@ remoteEvents.SellPet.OnServerEvent:Connect(function(player, petId)
 	if success then
 		PetAbilityManager.UpdatePlayerAbilities(player)
 		PetVisualSystem.UpdatePlayerPets(player)
-		-- Success message is handled by SellPet function
 	else
 		remoteEvents.ShowFeedback:FireClient(player, "Failed to sell pet!", "error")
 	end
@@ -230,13 +227,144 @@ remoteEvents.FusePets.OnServerEvent:Connect(function(player, petId1, petId2)
 	if fusedPetId then
 		PetAbilityManager.UpdatePlayerAbilities(player)
 		PetVisualSystem.UpdatePlayerPets(player)
-		-- Success message is handled by FusePets function
 	else
 		remoteEvents.ShowFeedback:FireClient(player, "Cannot fuse these pets! Must be same type.", "error")
 	end
 end)
 
--- Remote Functions
+-- === GARDEN SYSTEM EVENT HANDLERS ===
+
+-- Helper functions for garden UI updates
+local function pushGardenUI(player)
+	local data = DataManager.GetPlayerData(player)
+	if data then
+		local inv = GardenSystem.GetInventory(player)
+		remoteEvents.RequestInventoryUpdate:FireClient(player, {
+			inventory = inv,
+			coins = data.coins,
+			experience = data.experience,
+			level = data.level
+		})
+	end
+end
+
+local function firePlotChanged(player, plotId, extra)
+	if extra then
+		remoteEvents.PlotDataChanged:FireAllClients(player.UserId, plotId, extra)
+	else
+		remoteEvents.PlotDataChanged:FireAllClients(player.UserId, plotId)
+	end
+end
+
+-- Buy Seed Handler
+remoteEvents.BuySeedEvent.OnServerEvent:Connect(function(player, seedType, amount)
+	if not validatePlayer(player) then return end
+	if not checkRateLimit(player, "BuySeedEvent") then return end
+
+	seedType = validateAndSanitizeInput(seedType, "string")
+	amount = (validateAndSanitizeInput(amount, "number") or 1)
+	if not seedType or amount < 1 then
+		remoteEvents.ShowFeedback:FireClient(player, "Invalid seed purchase request!", "error")
+		return
+	end
+
+	if not GardenSystem.IsValidSeed(seedType) then
+		remoteEvents.ShowFeedback:FireClient(player, "Invalid seed type!", "error")
+		return
+	end
+
+	local ok, msg, coinsSpent = GardenSystem.BuySeed(player, seedType, amount)
+	if ok then
+		remoteEvents.ShowFeedback:FireClient(player, ("Purchased %d x %s."):format(amount, seedType), "success")
+		pushGardenUI(player)
+	else
+		remoteEvents.ShowFeedback:FireClient(player, msg or "Purchase failed!", "error")
+	end
+end)
+
+-- Plant Seed Handler
+remoteEvents.PlantSeedEvent.OnServerEvent:Connect(function(player, plotIndex, seedType)
+	if not validatePlayer(player) then return end
+	if not checkRateLimit(player, "PlantSeedEvent") then return end
+
+	plotIndex = validateAndSanitizeInput(plotIndex, "number")
+	seedType = validateAndSanitizeInput(seedType, "string")
+
+	if not plotIndex or not seedType then
+		remoteEvents.ShowFeedback:FireClient(player, "Invalid planting data!", "error")
+		return
+	end
+	
+	if not GardenSystem.IsValidSeed(seedType) then
+		remoteEvents.ShowFeedback:FireClient(player, "Invalid seed type!", "error")
+		return
+	end
+
+	local ok, msg = GardenSystem.PlantSeed(player, plotIndex, seedType)
+	if ok then
+		firePlotChanged(player, plotIndex)
+		pushGardenUI(player)
+		remoteEvents.ShowFeedback:FireClient(player, "Seed planted!", "success")
+	else
+		remoteEvents.ShowFeedback:FireClient(player, msg or "Planting failed!", "error")
+	end
+end)
+
+-- Harvest Plant Handler
+remoteEvents.HarvestPlantEvent.OnServerEvent:Connect(function(player, plotIndex)
+	if not validatePlayer(player) then return end
+	if not checkRateLimit(player, "HarvestPlantEvent") then return end
+
+	plotIndex = validateAndSanitizeInput(plotIndex, "number")
+	if not plotIndex then
+		remoteEvents.ShowFeedback:FireClient(player, "Invalid plot for harvest!", "error")
+		return
+	end
+
+	local ok, cropType, qty, msg = GardenSystem.Harvest(player, plotIndex)
+	if ok then
+		firePlotChanged(player, plotIndex)
+		pushGardenUI(player)
+		remoteEvents.ShowFeedback:FireClient(player, ("Harvested %d x %s."):format(qty or 1, cropType or "?"), "success")
+	else
+		remoteEvents.ShowFeedback:FireClient(player, msg or "Harvest failed!", "error")
+	end
+end)
+
+-- Sell Plant Handler
+remoteEvents.SellPlantEvent.OnServerEvent:Connect(function(player, cropType, quantity)
+	if not validatePlayer(player) then return end
+	if not checkRateLimit(player, "SellPlantEvent") then return end
+
+	cropType = validateAndSanitizeInput(cropType, "string")
+	quantity = validateAndSanitizeInput(quantity, "number")
+	if not cropType or not quantity or quantity < 1 then
+		remoteEvents.ShowFeedback:FireClient(player, "Invalid sell data!", "error")
+		return
+	end
+	
+	if not GardenSystem.IsValidCrop(cropType) then
+		remoteEvents.ShowFeedback:FireClient(player, "Invalid crop type!", "error")
+		return
+	end
+
+	local ok, coinsGained, msg = GardenSystem.SellPlant(player, cropType, quantity)
+	if ok then
+		pushGardenUI(player)
+		remoteEvents.ShowFeedback:FireClient(player, ("Sold %d x %s and gained %d coins."):format(quantity, cropType, coinsGained or 0), "success")
+	else
+		remoteEvents.ShowFeedback:FireClient(player, msg or "Sale failed!", "error")
+	end
+end)
+
+-- Request Inventory Update Handler
+remoteEvents.RequestInventoryUpdate.OnServerEvent:Connect(function(player)
+	if not validatePlayer(player) then return end
+	if not checkRateLimit(player, "RequestInventoryUpdate") then return end
+	pushGardenUI(player)
+end)
+
+-- === REMOTE FUNCTIONS ===
 
 -- Get Pet Data Function
 getPetDataFunc.OnServerInvoke = function(player)
@@ -272,7 +400,7 @@ getShopDataFunc.OnServerInvoke = function(player)
 	return {
 		eggs = EggConfig.GetShopDisplayData(),
 		playerCoins = DataManager.GetPlayerData(player).coins or 0,
-		pendingEggs = EggManager.GetPendingEggCount() -- Fixed function name
+		pendingEggs = EggManager.GetPendingEggCount()
 	}
 end
 
@@ -281,162 +409,14 @@ Players.PlayerRemoving:Connect(function(player)
 	rateLimits[player.UserId] = nil
 end)
 
--- === Helpers pentru update UI ===
-local function pushGardenUI(player)
-	-- Trimite inventar de semin?e/recolte ?i statistici pentru UI
-	local data = DataManager.GetPlayerData(player)
-	if data then
-		local inv = GardenSystem.GetInventory and GardenSystem.GetInventory(player) or {}
-		remoteEvents.RequestInventoryUpdate:FireClient(player, {
-			inventory = inv,
-			coins = data.coins,
-			experience = data.experience,
-			level = data.level
-		})
-	end
-end
-
-local function firePlotChanged(player, plotId, extra)
-	-- Notifica clientul/întreaga lume ca un plot s-a schimbat
-	-- Daca vizualele sunt globale: FireAllClients; daca sunt per-jucator: FireClient
-	if extra then
-		remoteEvents.PlotDataChanged:FireAllClients(player.UserId, plotId, extra)
-	else
-		remoteEvents.PlotDataChanged:FireAllClients(player.UserId, plotId)
-	end
-end
-
--- === Garden: BuySeed ===
-remoteEvents.BuySeedEvent.OnServerEvent:Connect(function(player, seedType, amount)
-	if not validatePlayer(player) then return end
-	if not checkRateLimit(player, "BuySeedEvent") then return end
-
-	seedType = validateAndSanitizeInput(seedType, "string")
-	amount = (validateAndSanitizeInput(amount, "number") or 1)
-	if not seedType or amount < 1 then
-		remoteEvents.ShowFeedback:FireClient(player, "Cerere invalida pentru cumparare semin?e!", "error")
-		return
-	end
-
-	if not (GardenSystem.IsValidSeed and GardenSystem.IsValidSeed(seedType)) then
-		remoteEvents.ShowFeedback:FireClient(player, "Tip de samân?a invalid!", "error")
-		return
-	end
-
-	local ok, msg, coinsSpent = GardenSystem.BuySeed(player, seedType, amount)
-	if ok then
-		remoteEvents.ShowFeedback:FireClient(player, ("Ai cumparat %d x %s."):format(amount, seedType), "success")
-		pushGardenUI(player)
-	else
-		remoteEvents.ShowFeedback:FireClient(player, msg or "Cumparare e?uata!", "error")
-	end
-end)
-
--- === Garden: PlantSeed === (CORECTED)
-remoteEvents.PlantSeedEvent.OnServerEvent:Connect(function(player, plotIndex, seedType)
-	if not validatePlayer(player) then return end
-	if not checkRateLimit(player, "PlantSeedEvent") then return end
-
-	plotIndex = validateAndSanitizeInput(plotIndex, "number")
-	seedType = validateAndSanitizeInput(seedType, "string")
-
-	if not plotIndex or not seedType then
-		remoteEvents.ShowFeedback:FireClient(player, "Date invalide pentru plantare!", "error")
-		return
-	end
-	if not (GardenSystem.IsValidSeed and GardenSystem.IsValidSeed(seedType)) then
-		remoteEvents.ShowFeedback:FireClient(player, "Tip de samân?a invalid pentru plantare!", "error")
-		return
-	end
-
-	-- FIXED: calls GardenSystem.PlantSeed with correct parameters
-	local ok, msg = GardenSystem.PlantSeed(player, plotIndex, seedType)
-	if ok then
-		firePlotChanged(player, plotIndex)
-		pushGardenUI(player)
-		remoteEvents.ShowFeedback:FireClient(player, "Samân?a a fost plantata!", "success")
-	else
-		remoteEvents.ShowFeedback:FireClient(player, msg or "Plantare e?uata!", "error")
-	end
-end)
-
--- === Garden: HarvestPlant === (FIXED name and parameters)
-remoteEvents.HarvestPlantEvent.OnServerEvent:Connect(function(player, plotIndex)
-	if not validatePlayer(player) then return end
-	if not checkRateLimit(player, "HarvestPlantEvent") then return end
-
-	plotIndex = validateAndSanitizeInput(plotIndex, "number")
-	if not plotIndex then
-		remoteEvents.ShowFeedback:FireClient(player, "Plot invalid pentru recoltare!", "error")
-		return
-	end
-
-	-- FIXED: calls GardenSystem.Harvest (which delegates to PlayerGardenManager.HarvestPlant)
-	local ok, cropType, qty, msg = GardenSystem.Harvest(player, plotIndex)
-	if ok then
-		firePlotChanged(player, plotIndex)
-		pushGardenUI(player)
-		remoteEvents.ShowFeedback:FireClient(player, ("Ai recoltat %d x %s."):format(qty or 1, cropType or "?"), "success")
-	else
-		remoteEvents.ShowFeedback:FireClient(player, msg or "Recoltare e?uata!", "error")
-	end
-end)
-
--- === Garden: SellPlant === (FIXED return format)
-remoteEvents.SellPlantEvent.OnServerEvent:Connect(function(player, cropType, quantity)
-	if not validatePlayer(player) then return end
-	if not checkRateLimit(player, "SellPlantEvent") then return end
-
-	cropType = validateAndSanitizeInput(cropType, "string")
-	quantity = validateAndSanitizeInput(quantity, "number")
-	if not cropType or not quantity or quantity < 1 then
-		remoteEvents.ShowFeedback:FireClient(player, "Date invalide pentru vânzare!", "error")
-		return
-	end
-	if not (GardenSystem.IsValidCrop and GardenSystem.IsValidCrop(cropType)) then
-		remoteEvents.ShowFeedback:FireClient(player, "Tip de planta invalid!", "error")
-		return
-	end
-
-	-- FIXED: expects (success, coinsGained, message) return format
-	local ok, coinsGained, msg = GardenSystem.SellPlant(player, cropType, quantity)
-	if ok then
-		pushGardenUI(player)
-		remoteEvents.ShowFeedback:FireClient(player, ("Ai vândut %d x %s ?i ai câ?tigat %d monede."):format(quantity, cropType, coinsGained or 0), "success")
-	else
-		remoteEvents.ShowFeedback:FireClient(player, msg or "Vânzare e?uata!", "error")
-	end
-end)
-
-
--- === Garden: ShowPlotOptions (op?ional; pentru UI contextual) ===
-remoteEvents.ShowPlotOptionsEvent.OnServerEvent:Connect(function(player, plotId)
-	if not validatePlayer(player) then return end
-	if not checkRateLimit(player, "ShowPlotOptionsEvent") then return end
-
-	plotId = validateAndSanitizeInput(plotId, "number")
-	if not plotId then return end
-
-	-- Recomandat: folose?te RemoteFunction daca ai nevoie sa returnezi o lista de op?iuni
-	-- Ca fallback, trimite un eveniment catre client cu datele disponibile
-	local options = GardenSystem.GetPlotOptions and GardenSystem.GetPlotOptions(player, plotId) or {}
-	remoteEvents.RequestInventoryUpdate:FireClient(player, { plotOptions = options })
-end)
-
--- === Garden: RequestInventoryUpdate (client -> server -> client) ===
-remoteEvents.RequestInventoryUpdate.OnServerEvent:Connect(function(player)
-	if not validatePlayer(player) then return end
-	if not checkRateLimit(player, "RequestInventoryUpdate") then return end
-	pushGardenUI(player)
-end)
-
-print("[RemoteEventHandler] Pet system remote events initialized")
+print("[RemoteEventHandler] Pet and garden system remote events initialized")
 
 return {
 	Events = remoteEvents,
 	Functions = {
 		GetPetData = getPetDataFunc,
 		GetPlayerStats = getPlayerStatsFunc,
-		GetShopData = getShopDataFunc
+		GetShopData = getShopDataFunc,
+		GetGardenPlots = getGardenPlots
 	}
 }
