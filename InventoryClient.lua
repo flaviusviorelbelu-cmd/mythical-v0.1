@@ -30,14 +30,14 @@ local isInventoryOpen = false
 -- Sample data structures (will be updated from server)
 local inventoryData = {
 	seeds = {
-		basic_seed = {count = 0, name = "Magic Wheat", icon = "??"},
-		stellar_seed = {count = 0, name = "Stellar Corn", icon = "??"},
-		cosmic_seed = {count = 0, name = "Cosmic Berries", icon = "??"}
+		basic_seed = {count = 0, name = "Magic Wheat", icon = "🌾"},
+		stellar_seed = {count = 0, name = "Stellar Corn", icon = "🌽"},
+		cosmic_seed = {count = 0, name = "Cosmic Berries", icon = "🫐"}
 	},
 	crops = {
-		magic_wheat = {count = 0, name = "Magic Wheat", sellPrice = 15, icon = "??"},
-		stellar_corn = {count = 0, name = "Stellar Corn", sellPrice = 80, icon = "??"},
-		cosmic_berries = {count = 0, name = "Cosmic Berries", sellPrice = 350, icon = "??"}
+		magic_wheat = {count = 0, name = "Magic Wheat", sellPrice = 15, icon = "🌾"},
+		stellar_corn = {count = 0, name = "Stellar Corn", sellPrice = 80, icon = "🌽"},
+		cosmic_berries = {count = 0, name = "Cosmic Berries", sellPrice = 350, icon = "🫐"}
 	},
 	pets = {}
 }
@@ -101,7 +101,7 @@ local function createInventoryUI()
 	titleLabel.Size = UDim2.new(1, -120, 1, 0)
 	titleLabel.Position = UDim2.new(0, 20, 0, 0)
 	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "?? My Inventory"
+	titleLabel.Text = "🎒 My Inventory"
 	titleLabel.TextColor3 = Color3.new(1, 1, 1)
 	titleLabel.TextScaled = true
 	titleLabel.Font = Enum.Font.GothamBold
@@ -112,7 +112,7 @@ local function createInventoryUI()
 	closeButton.Size = UDim2.new(0, 80, 1, -10)
 	closeButton.Position = UDim2.new(1, -90, 0, 5)
 	closeButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-	closeButton.Text = "? Close"
+	closeButton.Text = "❌ Close"
 	closeButton.TextColor3 = Color3.new(1, 1, 1)
 	closeButton.TextScaled = true
 	closeButton.Font = Enum.Font.GothamBold
@@ -138,7 +138,7 @@ local function createInventoryUI()
 	seedTabButton.Size = UDim2.new(0.33, -5, 1, 0)
 	seedTabButton.Position = UDim2.new(0, 0, 0, 0)
 	seedTabButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-	seedTabButton.Text = "?? Seeds"
+	seedTabButton.Text = "🌱 Seeds"
 	seedTabButton.TextColor3 = Color3.new(1, 1, 1)
 	seedTabButton.TextScaled = true
 	seedTabButton.Font = Enum.Font.GothamBold
@@ -153,7 +153,7 @@ local function createInventoryUI()
 	cropTabButton.Size = UDim2.new(0.33, -5, 1, 0)
 	cropTabButton.Position = UDim2.new(0.33, 2.5, 0, 0)
 	cropTabButton.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
-	cropTabButton.Text = "?? Crops"
+	cropTabButton.Text = "🌾 Crops"
 	cropTabButton.TextColor3 = Color3.new(1, 1, 1)
 	cropTabButton.TextScaled = true
 	cropTabButton.Font = Enum.Font.GothamBold
@@ -168,7 +168,7 @@ local function createInventoryUI()
 	petTabButton.Size = UDim2.new(0.33, -5, 1, 0)
 	petTabButton.Position = UDim2.new(0.66, 5, 0, 0)
 	petTabButton.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
-	petTabButton.Text = "?? Pets"
+	petTabButton.Text = "🐾 Pets"
 	petTabButton.TextColor3 = Color3.new(1, 1, 1)
 	petTabButton.TextScaled = true
 	petTabButton.Font = Enum.Font.GothamBold
@@ -310,7 +310,7 @@ local function createInventoryUI()
 			priceLabel.Size = UDim2.new(0, 250, 0, 25)
 			priceLabel.Position = UDim2.new(0, 90, 0, 65)
 			priceLabel.BackgroundTransparency = 1
-			priceLabel.Text = "?? " .. cropData.sellPrice .. " coins each"
+			priceLabel.Text = "💰 " .. cropData.sellPrice .. " coins each"
 			priceLabel.TextColor3 = Color3.fromRGB(241, 196, 15)
 			priceLabel.TextScaled = true
 			priceLabel.Font = Enum.Font.Gotham
@@ -364,7 +364,7 @@ local function createInventoryUI()
 		noItemsLabel.Size = UDim2.new(1, 0, 0, 100)
 		noItemsLabel.Position = UDim2.new(0, 0, 0.4, 0)
 		noItemsLabel.BackgroundTransparency = 1
-		noItemsLabel.Text = "??\n\nNo pets yet!\nHatch some eggs to get pets."
+		noItemsLabel.Text = "🐾\n\nNo pets yet!\nHatch some eggs to get pets."
 		noItemsLabel.TextColor3 = Color3.fromRGB(149, 165, 166)
 		noItemsLabel.TextScaled = true
 		noItemsLabel.Font = Enum.Font.Gotham
