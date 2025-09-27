@@ -1,35 +1,43 @@
--- ServerScriptService/Initializer (Script)
--- Fixed initialization sequence with proper module loading
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
--- Wait for essential modules to load
-local GameManager = require(script.Parent:WaitForChild("GameManager"))
-local MagicalRealm = require(script.Parent:WaitForChild("MagicalRealm"))
-local DataManager = require(script.Parent:WaitForChild("DataManager"))
-local RemoteEventHandler = require(script.Parent:WaitForChild("RemoteEventHandler"))
+-- Initializer.lua - Final Fixed Version
+local ServerScriptService = game:GetService("ServerScriptService")
+local Players = game:GetService("Players")
 
 print("[Initializer] Starting game initialization...")
 
--- Step 1: Generate the magical world environment first
+-- Initialize core systems in correct order (ONLY ModuleScripts can be required)
+local GameManager = require(ServerScriptService.GameManager)
+local DataManager = require(ServerScriptService.DataManager)
+local MagicalRealm = require(ServerScriptService.MagicalRealm)
+local GardenSystem = require(ServerScriptService.GardenSystem)
+local ShopManager = require(ServerScriptService.ShopManager)
+local PlayerGardenManager = require(ServerScriptService.PlayerGardenManager)
+
+-- NOTE: RemoteEventHandler and BuildingInteractionHandler are Scripts, not ModuleScripts
+-- They run automatically and don't need to be required
+
+-- Initialize the magical realm first
 MagicalRealm.CreateWorld()
-print("[Initializer] Magical world created")
+wait(3) -- Give extra time for buildings to spawn and Scripts to initialize
 
--- Step 2: Initialize data management systems
-print("[Initializer] Data systems initialized")
+print("[Initializer] All systems initialized successfully!")
 
--- Step 3: Setup remote events for client-server communication
-print("[Initializer] Remote events initialized")
+-- Handle player connections (Fixed capitalization)
+local function onPlayerAdded(player)
+	print("[Initializer] Player joined:", player.Name)
+	GameManager.OnPlayerAdded(player)  -- Capitalized function name
+end
 
--- Step 4: GameManager will handle player joining/leaving automatically via its connections
-print("[Initializer] GameManager loaded and player events connected")
+local function onPlayerRemoving(player)
+	print("[Initializer] Player leaving:", player.Name)
+	GameManager.OnPlayerRemoving(player)  -- Capitalized function name
+end
 
--- Create initialization complete event for other systems
-local initCompleteEvent = Instance.new("BindableEvent")
-initCompleteEvent.Name = "InitializationComplete"
-initCompleteEvent.Parent = ReplicatedStorage
+Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(onPlayerRemoving)
 
--- Fire the event to signal other systems
-initCompleteEvent:Fire()
+-- Handle players already in game
+for _, player in pairs(Players:GetPlayers()) do
+	onPlayerAdded(player)
+end
 
-print("[Initializer] Game initialization complete! Players can now join.")
+print("[Initializer] Initialization complete!")
